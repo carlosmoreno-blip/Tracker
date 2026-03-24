@@ -39,7 +39,7 @@
   tbody tr:hover { background: #f7f9ff; }
   td { padding: 7px 10px; vertical-align: top; }
   .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; letter-spacing: 0.1px; }
-  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
+  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-notmounted{background:#FAEEDA;color:#854F0B}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
   .b-pending{background:#FFF3D6;color:#BA7517}.b-review{background:#FAECE7;color:#993C1D}
   .b-calibration{background:#E6F1FB;color:#185FA5}.b-sampling{background:#EEEDFE;color:#3C3489}
   .b-completed{background:#E1F5EE;color:#0F6E56}.b-offline{background:#F1EFE8;color:#5F5E5A}
@@ -473,9 +473,9 @@
 </div>
 
 <script>
-const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Completed','Offline','No longer in use'];
-const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger'};
-const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray'};
+const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Completed','Offline','Not mounted','No longer in use'];
+const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger','Not mounted':'notmounted'};
+const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray','Not mounted':'c-amber'};
 const URL_KEY = 'ufp_script_url';
 
 let cameras = [], filtered = [], sortCol = 'site', sortDir = 'asc', page = 1, statFilter = '';
@@ -614,7 +614,7 @@ function buildStats() {
   el.innerHTML = `<div class="stat ${statFilter === '' ? 'active-filter' : ''}" onclick="setStatFilter('')"><div class="stat-label">Total</div><div class="stat-val c-gray">${statsBase.length}</div></div>`;
   Object.entries(counts).forEach(([s, n]) => {
     if (!n) return;
-    el.innerHTML += `<div class="stat ${statFilter === s ? 'active-filter' : ''}" onclick="setStatFilter(${JSON.stringify(s)})"><div class="stat-label">${s}</div><div class="stat-val ${STAT_COLORS[s] || 'c-gray'}">${n}</div></div>`;
+    el.innerHTML += `<div class="stat ${statFilter === s ? 'active-filter' : ''}" onclick="setStatFilter(${JSON.stringify(s)})" style="cursor:pointer"><div class="stat-label">${s}</div><div class="stat-val ${STAT_COLORS[s] || 'c-gray'}">${n}</div></div>`;
   });
   document.getElementById('headerCount').textContent = statsBase.length;
 }
@@ -691,7 +691,7 @@ function toggleRetired() {
 function applyFilters() {
   const q = document.getElementById('search').value.toLowerCase();
   const site = document.getElementById('filterSite').value;
-  const status = document.getElementById('filterStatus').value;
+  const status = statFilter || document.getElementById('filterStatus').value;
   const type = document.getElementById('filterType').value;
   const vp = document.getElementById('filterVP') ? document.getElementById('filterVP').value : '';
   filtered = cameras.filter(c => {
@@ -806,14 +806,18 @@ function buildWeeklyReport() {
   const inProgress = sites.filter(s => siteMap[s].some(c => c.status !== 'Completed' && c.status !== 'Offline'));
   document.getElementById('wr-col-1').innerHTML = inProgress.length ? inProgress.map(site => {
     const cams = siteMap[site];
-    const phases = [...new Set(cams.map(phase))].join(' / ');
     const lastContact = cams.reduce((best, c) => {
       const d = daysSince(c); return (d !== null && (best===null||d<best)) ? d : best;
     }, null);
-    return `<div class="wr-site">
+    const camList = [...cams].sort((a,b) => (a.equipment||'').localeCompare(b.equipment||''))
+      .map(c => `<div class="wr-site-detail" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span>${c.equipment || ''}</span>
+        <span class="badge b-${STATUS_CLASS[c.status]||'active'}" style="font-size:9px;padding:1px 6px;flex-shrink:0">${c.status||''}</span>
+      </div>`).join('');
+    return `<div class="wr-site" style="padding-bottom:8px">
       <div class="wr-site-name">${site}</div>
-      <div class="wr-site-detail">${phases}</div>
-      ${lastContact !== null ? `<div class="wr-site-detail">${lastContact}d since last status change</div>` : ''}
+      ${camList}
+      ${lastContact !== null ? `<div class="wr-site-detail" style="margin-top:4px;color:#aaa">${lastContact}d since last change</div>` : ''}
     </div>`;
   }).join('') : '<div class="wr-empty">No sites in progress</div>';
 
