@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UFP AI Camera Status Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0ee; color: #1a1a18; font-size: 13px; }
+  header { background: #0f1923; color: #fff; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 3px solid #185FA5; }
+  header h1 { font-size: 15px; font-weight: 500; }
+  .header-meta { font-size: 11px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 12px; }
+  .sync-indicator { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #3B6D11; }
+  .sync-dot.syncing { background: #EF9F27; animation: pulse 1s infinite; }
+  .sync-dot.error { background: #A32D2D; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .container { max-width: 100%; margin: 0; padding: 10px 16px 20px; }
+  .topbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; background:#fff; padding:8px 12px; border-radius:8px; border:1px solid #e0e0de; }
+  .topbar input[type=text] { flex: 1; min-width: 160px; height: 30px; padding: 0 10px; border: 1px solid #e0e0de; border-radius: 6px; font-size: 12px; background: #f9f9f7; }
+  .topbar select { height: 30px; padding: 0 8px; border: 1px solid #e0e0de; border-radius: 6px; font-size: 12px; background: #f9f9f7; min-width: 120px; }
+  .add-cam-btn { height: 30px; padding: 0 14px; background: #185FA5; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500; }
+  .add-cam-btn:hover { background: #333; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 6px; margin-bottom: 8px; }
+  .stat { background: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; border: 1.5px solid transparent; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .stat:hover { border-color: #bbb; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.08); }
+  .stat.active-filter { border-color: #185FA5; background: #f0f6ff; }
+  .stat-label { font-size: 9px; font-weight: 500; color: #888; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .stat-val { font-size: 20px; font-weight: 600; line-height: 1; }
+  .c-green{color:#3B6D11}.c-red{color:#A32D2D}.c-amber{color:#854F0B}.c-pink{color:#72243E}
+  .c-blue{color:#185FA5}.c-purple{color:#3C3489}.c-teal{color:#0F6E56}
+  .c-gray{color:#5F5E5A}.c-orange{color:#BA7517}
+  .table-wrap { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 200px); background: #fff; border-radius: 10px; border: 1px solid #e0e0de; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { text-align: left; font-size: 10px; font-weight: 600; color: #888; padding: 7px 10px; border-bottom: 1px solid #eee; white-space: nowrap; cursor: pointer; user-select: none; background: #f7f7f5; text-transform: uppercase; letter-spacing: 0.4px; position: sticky; top: 0; z-index: 2; }
+  thead th:hover { color: #333; }
+  tbody tr { border-bottom: 1px solid #f0f0ee; transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f7f9ff; }
+  td { padding: 7px 10px; vertical-align: top; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; letter-spacing: 0.1px; }
+  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
+  .b-pending{background:#FFF3D6;color:#BA7517}.b-review{background:#FAECE7;color:#993C1D}
+  .b-calibration{background:#E6F1FB;color:#185FA5}.b-sampling{background:#EEEDFE;color:#3C3489}
+  .b-completed{background:#E1F5EE;color:#0F6E56}.b-offline{background:#F1EFE8;color:#5F5E5A}
+  select.status-sel { font-size: 11px; padding: 3px 7px; border: 1px solid #e0e0de; border-radius: 6px; background: #f9f9f7; cursor: pointer; max-width: 175px; width: 100%; }
+  .note-area { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
+  textarea.note-input { font-size: 11px; padding: 4px 7px; border: 1px solid #e0e0de; border-radius: 5px; background: #f9f9f7; resize: vertical; width: 100%; min-height: 32px; max-height: 60px; font-family: inherit; }
+  textarea.note-input:focus { outline: none; border-color: #888; }
+  .save-btn { font-size: 11px; padding: 4px 12px; background: #0f1923; color: #fff; border: none; border-radius: 5px; cursor: pointer; align-self: flex-start; font-weight: 500; }
+  .save-btn:hover { background: #333; }
+  .save-btn:disabled { background: #999; cursor: default; }
+  .latest-note { font-size: 11px; color: #333; margin-bottom: 4px; padding: 4px 8px; background: #f5f5f3; border-left: 3px solid #185FA5; border-radius: 0 4px 4px 0; }
+  .equip-name { font-weight: 600; font-size: 13px; color: #1a1a18; }
+  .cam-id { font-size: 10px; color: #aaa; margin-top: 1px; font-family: monospace; }
+  .type-pill { display: inline-block; font-size: 10px; padding: 1px 5px; border-radius: 3px; border: 1px solid #e0e0de; color: #888; }
+  .ts-main { font-size: 11px; color: #555; white-space: nowrap; }
+  .ts-full { font-size: 9px; color: #aaa; margin-top: 2px; }
+  .pagebar { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: #888; }
+  .pagebar button { padding: 5px 14px; border: 1px solid #e0e0de; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px; font-weight: 500; }
+  .pagebar button:hover { background: #f5f5f3; }
+  .pagebar .pginfo { flex: 1; text-align: center; }
+  .col-sort::after { content: ' ↕'; opacity: 0.3; font-size: 10px; }
+  .col-sort.asc::after { content: ' ↑'; opacity: 1; }
+  .col-sort.desc::after { content: ' ↓'; opacity: 1; }
+  .changed-row { animation: flashRow 1.5s ease; }
+  @keyframes flashRow { 0%,100%{background:transparent} 30%{background:rgba(59,109,17,0.07)} }
+  .loading-banner { background: #fff; border: 1px solid #e0e0de; border-radius: 8px; padding: 40px; text-align: center; color: #888; margin: 20px 0; }
+  .error-banner { background: #FCEBEB; border: 1px solid #F09595; border-radius: 8px; padding: 12px 16px; color: #A32D2D; margin-bottom: 14px; font-size: 12px; display: none; font-weight: 500; }
+  .config-banner { background: #FFF8E8; border: 1px solid #FAC775; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; font-size: 12px; color: #633806; }
+  .config-banner strong { display: block; margin-bottom: 6px; font-size: 13px; }
+  .config-banner input { width: 100%; margin-top: 8px; height: 32px; padding: 0 8px; border: 1px solid #EF9F27; border-radius: 5px; font-size: 12px; font-family: inherit; }
+  .config-banner button { margin-top: 8px; padding: 5px 14px; background: #1a1a18; color: #fff; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; }
+  .note-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; justify-content: center; align-items: center; }
+  .note-modal-overlay.open { display: flex; }
+  .note-modal { background: #fff; border-radius: 12px; border: 1px solid #e0e0de; width: 420px; max-width: 95vw; padding: 24px; }
+  .note-modal-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .note-modal-sub { font-size: 11px; color: #888; margin-bottom: 14px; }
+  .note-modal textarea { width: 100%; height: 100px; padding: 8px 10px; border: 1px solid #e0e0de; border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; background: #f9f9f7; }
+  .note-modal textarea:focus { outline: none; border-color: #888; background: #fff; }
+  .note-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .note-modal select { width: 100%; height: 34px; padding: 0 8px; border: 1px solid #e0e0de; border-radius: 8px; font-size: 13px; font-family: inherit; background: #f9f9f7; margin-bottom: 10px; }
+  .note-modal select:focus { outline: none; border-color: #888; }
+  .add-note-btn { font-size: 11px; padding: 3px 10px; border: 1px solid #ddd; border-radius: 5px; background: #fff; cursor: pointer; color: #555; white-space: nowrap; }
+  .add-note-btn:hover { background: #f5f5f3; border-color: #aaa; }
+  .add-note-btn.eng { border-color: #9FE1CB; color: #085041; background: #f5fbf8; }
+  .add-note-btn.eng:hover { background: #E1F5EE; }
+  .add-note-btn.cs { border-color: #B5D4F4; color: #0C447C; background: #f0f6ff; }
+  .add-note-btn.cs:hover { background: #E6F1FB; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: flex-start; padding-top: 60px; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: #fff; border-radius: 12px; border: 1px solid #e0e0de; width: 520px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 24px; }
+  .modal-box h2 { font-size: 15px; font-weight: 600; margin-bottom: 18px; color: #1a1a18; }
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-grid .full { grid-column: 1 / -1; }
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-group label { font-size: 11px; font-weight: 500; color: #666; }
+  .field-group input, .field-group select, .field-group textarea { width: 100%; height: 32px; padding: 0 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px; font-family: inherit; background: #fff; color: #1a1a18; }
+  .field-group input:focus, .field-group select:focus, .field-group textarea:focus { outline: none; border-color: #888; }
+  .field-group textarea { height: 60px; padding: 6px 8px; resize: vertical; }
+  .field-group .hint { font-size: 10px; color: #aaa; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
+  .modal-footer button { padding: 6px 16px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .btn-cancel { background: #fff; border: 1px solid #ddd; color: #666; }
+  .btn-cancel:hover { background: #f5f5f3; }
+  .btn-save { background: #1a1a18; border: none; color: #fff; }
+  .btn-save:hover { background: #333; }
+  .err-msg { font-size: 11px; color: #A32D2D; display: none; }
+  @media (max-width: 768px) { header h1 { font-size: 14px; } .stats { grid-template-columns: repeat(3, 1fr); } .modal-grid { grid-template-columns: 1fr; } .modal-grid .full { grid-column: 1; } }
+  .blocked-duration { display:inline-block; font-size:10px; font-weight:500; padding:2px 7px; border-radius:999px; background:#F1EFE8; color:#5F5E5A; border:1px solid #D3D1C7; margin-top:3px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+  .blocked-duration.warning { background:#FCEBEB; color:#A32D2D; border-color:#F09595; }
+  .weekly-report { display:none; padding: 0 0 40px; }
+  .weekly-report.visible { display:block; }
+  .wr-header { background:#0f1923; color:#fff; padding:20px 24px 18px; border-radius:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:flex-start; }
+  .wr-title { font-size:22px; font-weight:700; letter-spacing:-0.3px; }
+  .wr-subtitle { font-size:12px; color:rgba(255,255,255,0.5); margin-top:4px; font-style:italic; }
+  .wr-meta { font-size:11px; color:rgba(255,255,255,0.4); text-align:right; }
+  .wr-cols { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:16px; }
+  .wr-col { border-radius:8px; overflow:hidden; border:1.5px solid; }
+  .wr-col-head { padding:10px 12px; font-size:12px; font-weight:700; color:#fff; display:flex; align-items:center; gap:8px; }
+  .wr-col-num { width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+  .wr-col-body { padding:10px 12px; background:#fff; min-height:300px; }
+  .wr-col-1 { border-color:#1a5fa8; } .wr-col-1 .wr-col-head { background:#1a5fa8; }
+  .wr-col-2 { border-color:#1a7a4a; } .wr-col-2 .wr-col-head { background:#1a7a4a; }
+  .wr-col-3 { border-color:#8b1a1a; } .wr-col-3 .wr-col-head { background:#8b1a1a; }
+  .wr-col-4 { border-color:#5a2d82; } .wr-col-4 .wr-col-head { background:#5a2d82; }
+  .wr-col-5 { border-color:#8b6000; } .wr-col-5 .wr-col-head { background:#8b6000; }
+  .wr-site { padding:8px 0; border-bottom:1px solid #f0f0ee; }
+  .wr-site:last-child { border-bottom:none; }
+  .wr-site-name { font-size:12px; font-weight:600; color:#1a1a18; margin-bottom:3px; }
+  .wr-site-detail { font-size:11px; color:#555; line-height:1.4; margin-bottom:2px; display:flex; align-items:flex-start; gap:5px; }
+  .wr-site-detail::before { content:''; width:3px; height:3px; border-radius:50%; background:#aaa; flex-shrink:0; margin-top:6px; }
+  .wr-blocked-tag { display:inline-block; font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; background:#FCEBEB; color:#A32D2D; border:1px solid #F09595; margin-bottom:3px; }
+  .wr-blocked-tag.warn { background:#FCEBEB; color:#791F1F; }
+  .wr-empty { font-size:11px; color:#bbb; font-style:italic; padding:8px 0; }
+  .wr-footer { background:#EAF3DE; border:1.5px solid #1a5fa8; border-radius:8px; padding:12px 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .wr-footer-label { font-size:12px; font-weight:700; color:#1a1a18; white-space:nowrap; }
+  .wr-footer-item { font-size:11px; color:#444; padding:0 12px; border-left:1px solid #ccc; }
+  .wr-footer-item:first-of-type { border-left:none; padding-left:0; }
+  .wr-next-action { width:100%; font-size:11px; padding:4px 6px; border:1px dashed #ccc; border-radius:4px; background:#fafafa; font-family:inherit; resize:vertical; min-height:36px; margin-top:4px; color:#333; }
+  .wr-next-action:focus { outline:none; border-color:#888; background:#fff; }
+  .wr-next-action-label { font-size:10px; color:#888; margin-top:6px; margin-bottom:2px; }
+  .wr-eng-update { font-size:11px; color:#185FA5; background:#E6F1FB; padding:3px 6px; border-radius:4px; margin-bottom:4px; line-height:1.4; }
+  .wr-owner { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .wr-owner select, .wr-owner input { font-size:11px; height:26px; padding:0 5px; border:1px solid #ddd; border-radius:4px; background:#fff; font-family:inherit; }
+  .wr-owner input { flex:1; min-width:80px; }
+  .col-hidden { display: none !important; }
+  .expand-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: #888; padding: 0 4px; white-space: nowrap; }
+  .expand-btn:hover { color: #333; }
+  .col-toggle-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: center; background:#fff; padding:10px 16px; border-radius:10px; border:1px solid #e0e0de; }
+  .col-toggle-bar span { font-size: 11px; color: #888; }
+  .col-pill { font-size: 11px; padding: 4px 12px; border-radius: 999px; border: 1px solid #ddd; background: #f5f5f3; cursor: pointer; color: #666; transition: all 0.15s; }
+  .col-pill.active { background: #0f1923; color: #fff; border-color: #0f1923; }
+  .uom-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .uom-check { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .uom-check input[type=checkbox] { width: 13px; height: 13px; cursor: pointer; accent-color: #1a1a18; }
+  .uom-pill { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #E6F1FB; color: #185FA5; border: 1px solid #B5D4F4; margin: 1px; }
+  .quick-notes-bar { background: #fff; border: 1px solid #e0e0de; border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: none; }
+  .quick-notes-bar.visible { display: block; }
+  .quick-notes-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .quick-notes-title { font-size: 13px; font-weight: 500; }
+  .quick-notes-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; line-height: 1; padding: 0; }
+  .quick-notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .qn-card { border: 1px solid #eee; border-radius: 7px; padding: 10px 12px; background: #fafafa; }
+  .qn-card-site { font-size: 10px; color: #888; margin-bottom: 1px; }
+  .qn-card-equip { font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+  .qn-card-note { font-size: 12px; color: #333; line-height: 1.4; border-left: 2px solid #ddd; padding-left: 7px; margin-bottom: 4px; }
+  .qn-card-note.is-update { border-left-color: #378ADD; }
+  .qn-card-meta { font-size: 10px; color: #aaa; }
+  .qn-card-status { display: inline-block; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 999px; }
+  .meeting-checks { display: flex; flex-direction: column; gap: 5px; }
+  .meeting-check { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; }
+  .meeting-check input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: #1a1a18; }
+  .meeting-pills { display: flex; flex-wrap: wrap; gap: 3px; }
+  .mpill { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #f0f0ee; color: #444; border: 1px solid #ddd; }
+  .mpill.done { background: #E1F5EE; color: #0F6E56; border-color: #9FE1CB; }
+  .updates-feed { display: flex; flex-direction: column; gap: 0; }
+  .update-entry { padding: 5px 8px; border-bottom: 1px solid #f0f0ee; background: #EAF3DE; border-left: 3px solid #3B6D11; border-radius: 0 4px 4px 0; margin-bottom: 3px; }
+  .update-entry:last-child { border-bottom: none; }
+  .update-author { font-size: 11px; font-weight: 600; color: #1a1a18; }
+  .update-time { font-size: 10px; color: #aaa; margin-left: 6px; }
+  .update-text { font-size: 11px; color: #444; margin-top: 2px; line-height: 1.4; }
+  .update-input-row { display: flex; gap: 6px; margin-top: 8px; }
+  .update-input-row select { height: 30px; font-size: 11px; padding: 0 6px; border: 1px solid #ddd; border-radius: 5px; background: #fff; min-width: 90px; }
+  .update-input-row textarea { flex: 1; height: 30px; min-height: 30px; max-height: 80px; font-size: 11px; padding: 4px 7px; border: 1px solid #ddd; border-radius: 5px; font-family: inherit; resize: vertical; }
+  .update-input-row button { height: 30px; padding: 0 10px; font-size: 11px; background: #1a1a18; color: #fff; border: none; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+  .update-input-row button:hover { background: #333; }
+  .update-input-row button:disabled { background: #999; }
+  .no-updates { font-size: 11px; color: #bbb; padding: 6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div style="width:4px;height:36px;background:#185FA5;border-radius:2px;flex-shrink:0"></div>
+    <div>
+      <h1>UFP — AI Camera Tracker</h1>
+      <div class="header-meta">
+        <span>Packaging Division · <span id="headerCount">—</span> cameras</span>
+        <div class="sync-indicator">
+          <div class="sync-dot" id="syncDot"></div>
+          <span id="syncLabel">Loading...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <button onclick="loadCameras()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;">↻ Refresh</button> 
+</header>
+
+<div class="container">
+
+  <div class="config-banner" id="configBanner">
+    <strong>One-time setup: paste your Apps Script Web App URL below</strong>
+    Follow the setup guide (SETUP.md) to get your URL, then paste it here. This is saved in your browser.
+    <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/YOUR_ID/exec">
+    <button onclick="saveScriptUrl()">Save & connect</button>
+  </div>
+
+  <div class="error-banner" id="errorBanner"></div>
+
+  <div class="quick-notes-bar" id="quickNotesBar">
+    <div class="quick-notes-header">
+      <span class="quick-notes-title" id="quickNotesTitle">Latest updates — meeting view</span>
+      <button class="quick-notes-close" onclick="toggleQuickNotes(false)">&#x2715;</button>
+    </div>
+    <div class="quick-notes-grid" id="quickNotesGrid"></div>
+  </div>
+
+  <div class="topbar">
+    <input type="text" id="search" placeholder="Search site, equipment, ID, notes…">
+    <select id="filterSite"><option value="">All sites</option></select>
+    <select id="filterStatus"><option value="">All statuses</option></select>
+    <select id="filterType"><option value="">All types</option><option>Legacy</option><option>NXT</option><option>Quality</option></select>
+    <select id="filterVP" style="height:34px;padding:0 8px;border:1px solid #e0e0de;border-radius:6px;font-size:12px;background:#f9f9f7;min-width:120px"><option value="">All VPs</option></select>
+    <button onclick="toggleQuickNotes(true)" style="height:30px;padding:0 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="meetingViewBtn">Meeting view</button>
+    <button onclick="toggleWeeklyReport()" id="weeklyReportBtn" style="height:30px;padding:0 12px;background:#0f1923;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Weekly report</button>
+    <button id="retiredToggleBtn" onclick="toggleRetired()" style="height:30px;padding:0 12px;background:#fff;color:#888;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Show retired</button>
+    <button class="add-cam-btn" onclick="openAddModal()">+ Add camera</button>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:11px;color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:0.4px">Overview</span><span style="font-size:10px;color:#bbb">Click a card to filter</span></div>
+  <div class="stats" id="statsRow"></div>
+
+  <div id="loadingBanner" class="loading-banner">Connecting to Google Sheets...</div>
+
+
+  <div class="table-wrap" id="tableWrap" style="display:none">
+    <table>
+      <thead><tr>
+        <th class="col-sort" onclick="sortBy('site',this)">Site</th>
+        <th class="col-sort" onclick="sortBy('equipment',this)">Equipment / ID</th>
+        <th class="col-sort" onclick="sortBy('status',this)">Status</th>
+        <th class="col-sort" onclick="sortBy('engineer',this)">AI Engineer</th>
+        <th>Meetings</th>
+        <th>Engineer Notes</th>
+        <th>CS Notes</th>
+        <th>Unit of measure</th>
+        <th class="col-sort" onclick="sortBy('vp',this)">Division VP</th>
+        <th class="col-sort" onclick="sortBy('last_updated',this)">Last Updated</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="pagebar">
+    <button onclick="prevPage()">← Prev</button>
+    <span class="pginfo" id="pginfo"></span>
+    <button onclick="nextPage()">Next →</button>
+  </div>
+
+  <div class="note-modal-overlay" id="noteModal">
+  <div class="note-modal">
+    <div class="note-modal-title" id="noteModalTitle">Add engineer note</div>
+    <div class="note-modal-sub" id="noteModalSub"></div>
+    <select id="noteModalEngineer" style="display:none">
+      <option value="">— Select engineer —</option>
+      <option>Amir</option><option>Ran</option><option>Noah</option><option>Laith</option>
+    </select>
+    <textarea id="noteModalText" placeholder="Type your note here…"></textarea>
+    <div class="note-modal-footer">
+      <button class="btn-cancel" onclick="closeNoteModal()">Cancel</button>
+      <button class="btn-save" id="noteModalSave" onclick="submitNoteModal()">Save note</button>
+    </div>
+  </div>
+</div>
+
+<div class="weekly-report" id="weeklyReport">
+    <div class="wr-header">
+      <div>
+        <div class="wr-title">Weekly Tracking Structure</div>
+        <div class="wr-subtitle" id="wrSubtitle"></div>
+      </div>
+      <div class="wr-meta">Every Friday — reviewed in daily CS + Eng sync</div>
+    </div>
+    <div class="wr-cols">
+      <div class="wr-col wr-col-1"><div class="wr-col-head"><span class="wr-col-num">1</span>Sites In Progress</div><div class="wr-col-body" id="wr-col-1"></div></div>
+      <div class="wr-col wr-col-2"><div class="wr-col-head"><span class="wr-col-num">2</span>Sites Completed</div><div class="wr-col-body" id="wr-col-2"></div></div>
+      <div class="wr-col wr-col-3"><div class="wr-col-head"><span class="wr-col-num">3</span>Sites Blocked — and Why</div><div class="wr-col-body" id="wr-col-3"></div></div>
+      <div class="wr-col wr-col-4"><div class="wr-col-head"><span class="wr-col-num">4</span>Cameras: Completed vs. Total</div><div class="wr-col-body" id="wr-col-4"></div></div>
+      <div class="wr-col wr-col-5"><div class="wr-col-head"><span class="wr-col-num">5</span>Next Actions Per Site</div><div class="wr-col-body" id="wr-col-5"></div></div>
+    </div>
+    <div class="wr-footer">
+      <span class="wr-footer-label">Reviewed in:</span>
+      <span class="wr-footer-item">Daily CS + AI Eng sync</span>
+      <span class="wr-footer-item">Bi-weekly CS + Customer update</span>
+      <span class="wr-footer-item">Escalated to leadership if any site is blocked &gt; 5 days</span>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <h2>Edit camera</h2>
+    <div class="modal-grid">
+      <div class="field-group">
+        <label>Site <span style="color:#A32D2D">*</span></label>
+        <input type="text" id="e-site">
+      </div>
+      <div class="field-group">
+        <label>Equipment name <span style="color:#A32D2D">*</span></label>
+        <input type="text" id="e-equip">
+      </div>
+      <div class="field-group">
+        <label>Camera ID</label>
+        <input type="text" id="e-id">
+      </div>
+      <div class="field-group">
+        <label>Camera type</label>
+        <select id="e-type">
+          <option value="">— select —</option>
+          <option>Legacy</option><option>NXT</option><option>Quality</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>AI Engineer</label>
+        <select id="e-engineer">
+          <option value="">— assign engineer —</option>
+          <option>Amir</option><option>Ran</option><option>Noah</option><option>Laith</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Division VP</label>
+        <input type="text" id="e-vp" placeholder="e.g. John Smith">
+      </div>
+      <div class="field-group">
+        <label>Work center / schedule</label>
+        <input type="text" id="e-wc">
+      </div>
+      <div class="field-group">
+        <label>Status</label>
+        <select id="e-status"></select>
+      </div>
+      <div class="field-group full">
+        <label>Unit of measure</label>
+        <div class="uom-checks">
+          <label class="uom-check"><input type="checkbox" id="e-uom-unit"> Unit</label>
+          <label class="uom-check"><input type="checkbox" id="e-uom-pallet"> Pallet</label>
+          <label class="uom-check"><input type="checkbox" id="e-uom-cuts"> Cuts</label>
+          <label class="uom-check"><input type="checkbox" id="e-uom-lf"> LF</label>
+          <label class="uom-check"><input type="checkbox" id="e-uom-bf"> BF</label>
+        </div>
+      </div>
+      <div class="field-group full">
+        <label>Notes</label>
+        <textarea id="e-notes"></textarea>
+      </div>
+      <div class="field-group full">
+        <label>Remarks</label>
+        <textarea id="e-remarks"></textarea>
+      </div>
+    </div>
+      <div class="field-group full">
+        <label>Meetings completed</label>
+        <div class="meeting-checks">
+          <label class="meeting-check"><input type="checkbox" id="e-meet-discovery"> Discovery call</label>
+          <label class="meeting-check"><input type="checkbox" id="e-meet-sampling"> Sampling</label>
+          <label class="meeting-check"><input type="checkbox" id="e-meet-datareview"> Data review</label>
+        </div>
+      </div>
+      <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
+        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-save" id="editSaveBtn" onclick="submitEditCamera()">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addModal">
+  <div class="modal-box">
+    <h2>Add new camera</h2>
+    <div class="modal-grid">
+      <div class="field-group">
+        <label>Site <span style="color:#A32D2D">*</span></label>
+        <select id="m-site-sel" onchange="handleSiteSel(this)">
+          <option value="">— select existing —</option>
+          <option value="__new__">+ Add new site...</option>
+        </select>
+        <div id="m-site-new-row" style="display:none;margin-top:5px">
+          <input type="text" id="m-site-text" placeholder="New site name">
+        </div>
+        <div class="err-msg" id="err-site">Site is required.</div>
+      </div>
+      <div class="field-group">
+        <label>Equipment name <span style="color:#A32D2D">*</span></label>
+        <input type="text" id="m-equip" placeholder="e.g. Moulder, Resaw">
+        <div class="err-msg" id="err-equip">Equipment name is required.</div>
+      </div>
+      <div class="field-group">
+        <label>Camera ID</label>
+        <input type="text" id="m-id" placeholder="e.g. 14500 or BLA-MOU">
+        <span class="hint">Leave blank to auto-generate</span>
+      </div>
+      <div class="field-group">
+        <label>Camera type</label>
+        <select id="m-type">
+          <option value="">— select —</option>
+          <option>Legacy</option><option>NXT</option><option>Quality</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>AI Engineer</label>
+        <select id="m-engineer">
+          <option value="">— assign engineer —</option>
+          <option>Amir</option><option>Ran</option><option>Noah</option><option>Laith</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Division VP</label>
+        <input type="text" id="m-vp" placeholder="e.g. John Smith">
+      </div>
+      <div class="field-group">
+        <label>Work center / schedule</label>
+        <input type="text" id="m-wc" placeholder="e.g. 1 Shift (7 to 3:30)">
+      </div>
+      <div class="field-group">
+        <label>Initial status</label>
+        <select id="m-status"></select>
+      </div>
+      <div class="field-group full">
+        <label>Unit of measure</label>
+        <div class="uom-checks">
+          <label class="uom-check"><input type="checkbox" id="m-uom-unit"> Unit</label>
+          <label class="uom-check"><input type="checkbox" id="m-uom-pallet"> Pallet</label>
+          <label class="uom-check"><input type="checkbox" id="m-uom-cuts"> Cuts</label>
+          <label class="uom-check"><input type="checkbox" id="m-uom-lf"> LF</label>
+          <label class="uom-check"><input type="checkbox" id="m-uom-bf"> BF</label>
+        </div>
+      </div>
+      <div class="field-group full">
+        <label>Notes</label>
+        <textarea id="m-notes" placeholder="Initial notes about this camera..."></textarea>
+      </div>
+      <div class="field-group full">
+        <label>Remarks</label>
+        <textarea id="m-remarks" placeholder="Optional remarks..."></textarea>
+      </div>
+    </div>
+      <div class="field-group full">
+        <label>Meetings completed</label>
+        <div class="meeting-checks">
+          <label class="meeting-check"><input type="checkbox" id="m-meet-discovery"> Discovery call</label>
+          <label class="meeting-check"><input type="checkbox" id="m-meet-sampling"> Sampling</label>
+          <label class="meeting-check"><input type="checkbox" id="m-meet-datareview"> Data review</label>
+        </div>
+      </div>
+      <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
+        <button class="btn-cancel" onclick="closeAddModal()">Cancel</button>
+        <button class="btn-save" id="addSaveBtn" onclick="submitAddCamera()">Add camera</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Completed','Offline','No longer in use'];
+const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger'};
+const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray'};
+const URL_KEY = 'ufp_script_url';
+
+let cameras = [], filtered = [], sortCol = 'site', sortDir = 'asc', page = 1, statFilter = '';
+const PAGE = 25;
+
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return m ? decodeURIComponent(m[2]) : '';
+}
+
+function getScriptUrl() {
+  try { const v = localStorage.getItem(URL_KEY); if (v) return v; } catch(e) {}
+  try { const v = sessionStorage.getItem(URL_KEY); if (v) return v; } catch(e) {}
+  return getCookie(URL_KEY) || '';
+}
+
+function saveScriptUrl() {
+  const val = document.getElementById('scriptUrlInput').value.trim();
+  if (!val.startsWith('https://script.google.com')) { alert('Please paste a valid Apps Script URL.'); return; }
+  try { localStorage.setItem(URL_KEY, val); } catch(e) {}
+  try { sessionStorage.setItem(URL_KEY, val); } catch(e) {}
+  const exp = new Date(Date.now() + 365*24*60*60*1000).toUTCString();
+  document.cookie = URL_KEY + '=' + encodeURIComponent(val) + '; expires=' + exp + '; path=/; SameSite=None; Secure';
+  document.getElementById('configBanner').style.display = 'none';
+  loadCameras();
+}
+
+
+function setSyncState(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot' + (state === 'syncing' ? ' syncing' : state === 'error' ? ' error' : '');
+  lbl.textContent = label;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 8000);
+}
+
+async function apiFetch(params) {
+  const url = getScriptUrl();
+  if (!url) return null;
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(url + '?' + qs);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function apiPost(body) {
+  // Send all writes as GET with encoded payload to avoid CORS issues with POST
+  const url = getScriptUrl();
+  if (!url) return null;
+  const encoded = encodeURIComponent(JSON.stringify(body));
+  const res = await fetch(url + '?action=' + body.action + '&payload=' + encoded);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function loadCameras() {
+  const url = getScriptUrl();
+  if (!url) {
+    document.getElementById('loadingBanner').textContent = 'Paste your Apps Script URL above to connect.';
+    return;
+  }
+  setSyncState('syncing', 'Loading...');
+  document.getElementById('loadingBanner').style.display = 'block';
+  document.getElementById('tableWrap').style.display = 'none';
+  try {
+    const data = await apiFetch({ action: 'getCameras' });
+    cameras = (data.cameras || []).map((c, i) => ({
+      ...c,
+      _key: i,
+      noteHistory: [],
+      historyLoaded: false,
+      updates: c.updates || [],
+      status_since: c.status_since || c.blocked_since || '',
+      // Seed latest_team_note from Sheet notes field if no history note yet
+      latest_team_note: c.latest_team_note || c.notes || ''
+    }));
+    setSyncState('ok', 'Live · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    document.getElementById('loadingBanner').style.display = 'none';
+    document.getElementById('tableWrap').style.display = 'block';
+    populateSites();
+    populateStatuses();
+    populateVPs();
+    applyFilters();
+
+  } catch (e) {
+    setSyncState('error', 'Connection error');
+    document.getElementById('loadingBanner').textContent = 'Could not connect. Check your URL and try refreshing.';
+    showError('Error loading cameras: ' + e.message);
+  }
+}
+
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return d;
+  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+}
+function fmtRel(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return d;
+  const diff = Date.now() - dt.getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.round(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.round(diff / 3600000) + 'h ago';
+  return fmtDate(d);
+}
+
+function buildStats() {
+  const counts = {};
+  STATUSES.forEach(s => counts[s] = 0);
+  // Count from filtered so stats reflect active site/type filters (but not status filter itself)
+  const site = document.getElementById('filterSite') ? document.getElementById('filterSite').value : '';
+  const type = document.getElementById('filterType') ? document.getElementById('filterType').value : '';
+  const q = document.getElementById('search') ? document.getElementById('search').value.toLowerCase() : '';
+  const vpStat = document.getElementById('filterVP') ? document.getElementById('filterVP').value : '';
+  const statsBase = cameras.filter(c => {
+    if (c.status === 'No longer in use' && !showRetired) return false;
+    if (q && ![c.site, c.equipment, c.id, c.notes, c.remarks].join(' ').toLowerCase().includes(q)) return false;
+    if (site && c.site.trim() !== site.trim()) return false;
+    if (type && c.type !== type) return false;
+    if (vpStat && c.vp !== vpStat) return false;
+    return true;
+  });
+  statsBase.forEach(c => counts[c.status] = (counts[c.status] || 0) + 1);
+  const el = document.getElementById('statsRow');
+  el.innerHTML = `<div class="stat ${statFilter === '' ? 'active-filter' : ''}" onclick="setStatFilter('')"><div class="stat-label">Total</div><div class="stat-val c-gray">${statsBase.length}</div></div>`;
+  Object.entries(counts).forEach(([s, n]) => {
+    if (!n) return;
+    el.innerHTML += `<div class="stat ${statFilter === s ? 'active-filter' : ''}" onclick="setStatFilter(${JSON.stringify(s)})"><div class="stat-label">${s}</div><div class="stat-val ${STAT_COLORS[s] || 'c-gray'}">${n}</div></div>`;
+  });
+  document.getElementById('headerCount').textContent = statsBase.length;
+}
+
+function setStatFilter(s) {
+  statFilter = s;
+  const el = document.getElementById('filterStatus');
+  if (el) el.value = s;
+  buildStats();
+  applyFilters();
+  // Scroll to table
+  const tw = document.getElementById('tableWrap');
+  if (tw && tw.style.display !== 'none') tw.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function populateSites() {
+  const sites = [...new Set(cameras.map(c => c.site))].sort();
+  const el = document.getElementById('filterSite');
+  const cur = el.value;
+  el.innerHTML = '<option value="">All sites</option>' + sites.map(s => `<option value="${s}">${s}</option>`).join('');
+  el.value = cur;
+}
+
+function populateVPs() {
+  const el = document.getElementById('filterVP');
+  if (!el) return;
+  const cur = el.value;
+  const vps = [...new Set(cameras.map(c => c.vp).filter(Boolean))].sort();
+  el.innerHTML = '<option value="">All VPs</option>' + vps.map(v => `<option value="${v}">${v}</option>`).join('');
+  el.value = cur;
+}
+
+function populateStatuses() {
+  const el = document.getElementById('filterStatus');
+  const cur = el.value;
+  el.innerHTML = '<option value="">All statuses</option>' + STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
+  el.value = cur;
+}
+
+const hiddenCols = new Set(['engineer','vp','uom']);
+
+function applyColVisibility() {
+  const allColEls = document.querySelectorAll('[data-col]');
+  allColEls.forEach(el => {
+    const col = el.getAttribute('data-col');
+    if (hiddenCols.has(col)) el.classList.add('col-hidden');
+    else el.classList.remove('col-hidden');
+  });
+}
+
+function toggleCol(col, btn) {
+  if (hiddenCols.has(col)) {
+    hiddenCols.delete(col);
+    btn.classList.add('active');
+  } else {
+    hiddenCols.add(col);
+    btn.classList.remove('active');
+  }
+  applyColVisibility();
+}
+
+let showRetired = false;
+
+function toggleRetired() {
+  showRetired = !showRetired;
+  const btn = document.getElementById('retiredToggleBtn');
+  btn.textContent = showRetired ? 'Hide retired' : 'Show retired';
+  btn.style.background = showRetired ? '#F1EFE8' : '#fff';
+  btn.style.color = showRetired ? '#5F5E5A' : '#888';
+  btn.style.borderColor = showRetired ? '#B4B2A9' : '#ddd';
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const site = document.getElementById('filterSite').value;
+  const status = document.getElementById('filterStatus').value;
+  const type = document.getElementById('filterType').value;
+  const vp = document.getElementById('filterVP') ? document.getElementById('filterVP').value : '';
+  filtered = cameras.filter(c => {
+    if (c.status === 'No longer in use' && !showRetired && status !== 'No longer in use') return false;
+    if (q && ![c.site, c.equipment, c.id, c.notes, c.remarks].join(' ').toLowerCase().includes(q)) return false;
+    if (site && c.site !== site) return false;
+    if (status && c.status !== status) return false;
+    if (type && c.type !== type) return false;
+    if (vp && c.vp !== vp) return false;
+    return true;
+  });
+  applySortInternal(); page = 1; render();
+}
+
+function applySortInternal() {
+  filtered.sort((a, b) => {
+    if (sortCol === 'last_updated') {
+      const va = a.last_updated ? new Date(a.last_updated).getTime() : 0;
+      const vb = b.last_updated ? new Date(b.last_updated).getTime() : 0;
+      return sortDir === 'asc' ? va - vb : vb - va;
+    }
+    return sortDir === 'asc' ? String(a[sortCol] || '').localeCompare(String(b[sortCol] || '')) : String(b[sortCol] || '').localeCompare(String(a[sortCol] || ''));
+  });
+}
+
+function sortBy(col, th) {
+  document.querySelectorAll('thead th').forEach(t => t.classList.remove('asc', 'desc'));
+  if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortCol = col; sortDir = 'asc'; }
+  th.classList.add(sortDir); applySortInternal(); render();
+}
+
+// Per-site next action storage (persists in localStorage)
+const NEXT_ACTIONS_KEY = 'ufp_next_actions_v1';
+function loadNextActions() { try { return JSON.parse(localStorage.getItem(NEXT_ACTIONS_KEY)||'{}'); } catch(e){ return {}; } }
+function saveNextAction(site, val) { const d=loadNextActions(); d[site]=val; localStorage.setItem(NEXT_ACTIONS_KEY, JSON.stringify(d)); }
+
+let weeklyReportVisible = false;
+
+function toggleWeeklyReport() {
+  weeklyReportVisible = !weeklyReportVisible;
+  const btn = document.getElementById('weeklyReportBtn');
+  const report = document.getElementById('weeklyReport');
+  const tableSection = document.getElementById('tableWrap');
+  const pagebar = document.querySelector('.pagebar');
+  const colBar = document.getElementById('colToggleBar');
+  if (weeklyReportVisible) {
+    buildWeeklyReport();
+    report.classList.add('visible');
+    tableSection.style.display = 'none';
+    if(pagebar) pagebar.style.display = 'none';
+
+    btn.style.background = '#fff';
+    btn.style.color = '#0f1923';
+    btn.style.border = '1px solid #0f1923';
+    btn.textContent = '✕ Close report';
+    report.scrollIntoView({ behavior:'smooth', block:'start' });
+  } else {
+    report.classList.remove('visible');
+    tableSection.style.display = 'block';
+    if(pagebar) pagebar.style.display = '';
+
+    btn.style.background = '#0f1923';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.textContent = 'Weekly report';
+  }
+}
+
+function buildWeeklyReport() {
+  const nextActions = loadNextActions();
+  const now = new Date();
+  document.getElementById('wrSubtitle').textContent = 'Week of ' + now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  // Group cameras by site (exclude retired)
+  const activeCams = cameras.filter(c => c.status !== 'No longer in use');
+  const siteMap = {};
+  activeCams.forEach(c => {
+    if (!siteMap[c.site]) siteMap[c.site] = [];
+    siteMap[c.site].push(c);
+  });
+  const sites = Object.keys(siteMap).sort();
+
+  // Helper: phase from status
+  function phase(c) {
+    if (c.status === 'Completed') return 'Sign-Off';
+    if (c.status === 'In Calibration') return 'Calibration';
+    if ((c.meetings||'').includes('sampling') || c.status === 'Sampling') return 'Validation';
+    if ((c.meetings||'').includes('discovery')) return 'Discovery';
+    return 'Discovery';
+  }
+
+  // Helper: days since status
+  function daysSince(c) {
+    if (!c.status_since) return null;
+    const ms = Date.now() - new Date(c.status_since).getTime();
+    return Math.floor(ms / 86400000);
+  }
+
+  // Helper: latest engineer update across site cameras
+  function latestEngUpdate(cams) {
+    let best = null;
+    cams.forEach(c => {
+      if (c.updates && c.updates.length) {
+        const u = c.updates[c.updates.length-1];
+        if (!best || new Date(u.time) > new Date(best.time)) best = {...u, equipment: c.equipment};
+      }
+    });
+    return best;
+  }
+
+  // ── Col 1: Sites In Progress ──────────────────────────────────────────────
+  const inProgress = sites.filter(s => siteMap[s].some(c => c.status !== 'Completed' && c.status !== 'Offline'));
+  document.getElementById('wr-col-1').innerHTML = inProgress.length ? inProgress.map(site => {
+    const cams = siteMap[site];
+    const phases = [...new Set(cams.map(phase))].join(' / ');
+    const lastContact = cams.reduce((best, c) => {
+      const d = daysSince(c); return (d !== null && (best===null||d<best)) ? d : best;
+    }, null);
+    return `<div class="wr-site">
+      <div class="wr-site-name">${site}</div>
+      <div class="wr-site-detail">${phases}</div>
+      ${lastContact !== null ? `<div class="wr-site-detail">${lastContact}d since last status change</div>` : ''}
+    </div>`;
+  }).join('') : '<div class="wr-empty">No sites in progress</div>';
+
+  // ── Col 2: Sites Completed ────────────────────────────────────────────────
+  const completed = sites.filter(s => siteMap[s].every(c => c.status === 'Completed' || c.status === 'Offline'));
+  // Also include sites where majority completed
+  const majorityDone = sites.filter(s => !completed.includes(s) && siteMap[s].filter(c=>c.status==='Completed').length >= Math.ceil(siteMap[s].length * 0.8));
+  document.getElementById('wr-col-2').innerHTML = [...completed,...majorityDone].length ? [...completed,...majorityDone].map(site => {
+    const cams = siteMap[site];
+    const done = cams.filter(c=>c.status==='Completed').length;
+    const total = cams.length;
+    const latestCompletion = cams.filter(c=>c.status==='Completed'&&c.status_since).sort((a,b)=>new Date(b.status_since)-new Date(a.status_since))[0];
+    return `<div class="wr-site">
+      <div class="wr-site-name">${site}</div>
+      <div class="wr-site-detail">${done} of ${total} cameras completed</div>
+      ${latestCompletion ? `<div class="wr-site-detail">Logged ${fmtDate(latestCompletion.status_since)}</div>` : ''}
+    </div>`;
+  }).join('') : '<div class="wr-empty">No sites fully completed yet</div>';
+
+  // ── Col 3: Sites Blocked ──────────────────────────────────────────────────
+  const blockedSites = sites.filter(s => siteMap[s].some(c => c.status === 'Blocked'));
+  document.getElementById('wr-col-3').innerHTML = blockedSites.length ? blockedSites.map(site => {
+    const blocked = siteMap[site].filter(c => c.status === 'Blocked');
+    return blocked.map(c => {
+      const d = daysSince(c);
+      const dLabel = d !== null ? `${d} day${d!==1?'s':''} blocked` : 'Blocked';
+      const latestUpdate = c.updates && c.updates.length ? c.updates[c.updates.length-1] : null;
+      return `<div class="wr-site">
+        <div class="wr-site-name">${site} — ${c.equipment}</div>
+        <div class="${d>=5?'wr-blocked-tag warn':'wr-blocked-tag'}">${dLabel}</div>
+        ${latestUpdate ? `<div class="wr-site-detail">${latestUpdate.text}</div>` : ''}
+        ${c.notes ? `<div class="wr-site-detail" style="color:#888">${c.notes}</div>` : ''}
+      </div>`;
+    }).join('');
+  }).join('') : '<div class="wr-empty">No sites currently blocked</div>';
+
+  // ── Col 4: Cameras Completed vs Total ─────────────────────────────────────
+  const totalAll = activeCams.length;
+  const completedAll = activeCams.filter(c=>c.status==='Completed').length;
+  const inCalib = activeCams.filter(c=>c.status==='In Calibration').length;
+  document.getElementById('wr-col-4').innerHTML = `
+    <div class="wr-site" style="padding-top:4px">
+      <div class="wr-site-name" style="font-size:20px;font-weight:700;color:#5a2d82">${completedAll} <span style="font-size:13px;font-weight:400;color:#888">of ${totalAll}</span></div>
+      <div class="wr-site-detail">cameras completed across all active sites</div>
+      <div style="background:#eee;border-radius:999px;height:6px;margin:8px 0 10px"><div style="background:#5a2d82;height:6px;border-radius:999px;width:${Math.round(completedAll/totalAll*100)}%"></div></div>
+    </div>
+    ${inCalib ? `<div class="wr-site"><div class="wr-site-detail">${inCalib} camera${inCalib!==1?'s':''} in calibration / validation queue</div></div>` : ''}
+    ${sites.filter(s=>siteMap[s].some(c=>c.status==='Completed')).map(site => {
+      const done = siteMap[site].filter(c=>c.status==='Completed').length;
+      const tot = siteMap[site].length;
+      return `<div class="wr-site">
+        <div class="wr-site-name" style="font-size:11px">${site}</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;background:#eee;border-radius:999px;height:4px"><div style="background:#1a7a4a;height:4px;border-radius:999px;width:${Math.round(done/tot*100)}%"></div></div>
+          <span style="font-size:10px;color:#555;white-space:nowrap">${done}/${tot}</span>
+        </div>
+      </div>`;
+    }).join('')}`;
+
+  // ── Col 5: Next Actions Per Site ──────────────────────────────────────────
+  document.getElementById('wr-col-5').innerHTML = inProgress.map(site => {
+    const cams = siteMap[site];
+    const engUpdate = latestEngUpdate(cams);
+    const saved = nextActions[site] || '';
+    return `<div class="wr-site">
+      <div class="wr-site-name">${site}</div>
+      ${engUpdate ? `<div class="wr-eng-update"><strong>${engUpdate.engineer}</strong> (${engUpdate.equipment}): ${engUpdate.text}</div>` : ''}
+      <div class="wr-next-action-label">Next action / owner / date:</div>
+      <textarea class="wr-next-action" data-site="${site}" placeholder="e.g. Schedule sampling call with site manager — CS — by Fri">${saved}</textarea>
+    </div>`;
+  }).join('') || '<div class="wr-empty">No active sites</div>';
+
+  // Save next actions on blur
+  document.querySelectorAll('.wr-next-action').forEach(ta => {
+    ta.addEventListener('blur', () => saveNextAction(ta.dataset.site, ta.value));
+  });
+}
+
+async function toggleQuickNotes(show) {
+  const bar = document.getElementById('quickNotesBar');
+  const grid = document.getElementById('quickNotesGrid');
+  if (!show) { bar.classList.remove('visible'); return; }
+
+  const STATUS_CLASS_QN = {'Active':'b-active','Tracking - Pending Signoff':'b-pending','Needs Review':'b-review','In Calibration':'b-calibration','Sampling':'b-sampling','Blocked':'b-blocked-issue','Completed':'b-completed','Offline':'b-offline','No longer in use':'b-nolonger'};
+  const activeSite = document.getElementById('filterSite') ? document.getElementById('filterSite').value : '';
+  const titleEl = document.getElementById('quickNotesTitle');
+  if (titleEl) titleEl.textContent = activeSite ? `Latest updates — ${activeSite}` : 'Latest updates — all sites';
+
+  // Show panel immediately with a loading state
+  bar.classList.add('visible');
+  bar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  grid.innerHTML = '<div style="font-size:12px;color:#aaa;grid-column:1/-1;padding:8px 0">Loading latest updates...</div>';
+
+  // Fetch history for any cameras in the filtered set that haven't loaded yet
+
+
+  const cards = filtered.map(cam => {
+    // Priority: latest engineer update > latest team note > original file note
+    let noteText = '', noteMeta = '', isUpdate = false;
+    if (cam.updates && cam.updates.length) {
+      const u = cam.updates[cam.updates.length - 1];
+      noteText = u.text;
+      noteMeta = (u.engineer ? u.engineer + ' · ' : '') + fmtRel(u.time);
+      isUpdate = true;
+    } else if (cam.latest_team_note) {
+      noteText = cam.latest_team_note;
+      noteMeta = fmtRel(cam.latest_note_time || cam.last_updated);
+    } else if (cam.notes) {
+      noteText = cam.notes;
+      noteMeta = 'From file';
+    }
+    if (!noteText) return null;
+    return { cam, noteText, noteMeta, isUpdate };
+  }).filter(Boolean);
+
+  if (!cards.length) {
+    grid.innerHTML = '<div style="font-size:12px;color:#aaa;grid-column:1/-1">No updates yet — add engineer updates or team notes to see them here.</div>';
+  } else {
+    grid.innerHTML = cards.map(({ cam, noteText, noteMeta, isUpdate }) => {
+      const uomPills = (cam.uom || '').split(',').filter(Boolean).map(u => `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:#E6F1FB;color:#185FA5;border:1px solid #B5D4F4;margin-right:2px">${u}</span>`).join('');
+      const meetPills = [
+        (cam.meetings||'').includes('discovery') ? 'Discovery' : '',
+        (cam.meetings||'').includes('sampling') ? 'Sampling' : '',
+        (cam.meetings||'').includes('datareview') ? 'Data review' : ''
+      ].filter(Boolean).map(m => `<span style="font-size:10px;padding:1px 5px;border-radius:999px;background:#E1F5EE;color:#0F6E56;border:1px solid #9FE1CB;margin-right:2px">${m}</span>`).join('');
+      return `
+      <div class="qn-card">
+        <div class="qn-card-site">${cam.site || ''}${cam.engineer ? ' · <strong>' + cam.engineer + '</strong>' : ''}${cam.vp ? ' · <span style="color:#888">VP: ' + cam.vp + '</span>' : ''}</div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+          <div class="qn-card-equip">${cam.equipment || ''}</div>
+          <span class="badge qn-card-status ${STATUS_CLASS_QN[cam.status] || 'b-active'}">${cam.status || ''}</span>
+        </div>
+        ${uomPills ? `<div style="margin-bottom:5px">${uomPills}</div>` : ''}
+        ${meetPills ? `<div style="margin-bottom:5px">${meetPills}</div>` : ''}
+        ${cam.status_since ? (() => { const ms=Date.now()-new Date(cam.status_since).getTime(); const days=Math.floor(ms/86400000); const hrs=Math.floor((ms%86400000)/3600000); const lbl=days>0?`${days}d ${hrs}h`:`${hrs}h`; const urgent=(cam.status==='Blocked'||cam.status==='Blocked'); const warn=urgent?days>=3:days>=14; return `<div class="${warn?'blocked-duration warning':'blocked-duration'}" style="margin-bottom:5px" title="In this status since ${new Date(cam.status_since).toLocaleString()}">${lbl} in ${cam.status}</div>`; })() : ''}
+        <div class="qn-card-note ${isUpdate ? 'is-update' : ''}">${noteText}</div>
+        <div class="qn-card-meta" style="margin-top:3px">${noteMeta}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function statusDuration(cam) {
+  if (!cam.status_since) return '';
+  const ms = Date.now() - new Date(cam.status_since).getTime();
+  if (ms < 0) return '';
+  const days = Math.floor(ms / 86400000);
+  const hrs = Math.floor((ms % 86400000) / 3600000);
+  const label = days > 0 ? `${days}d ${hrs}h` : `${hrs}h`;
+  // Color thresholds vary by status
+  const isUrgent = cam.status === 'Blocked' || cam.status === 'Blocked';
+  const warnDays = isUrgent ? 3 : 14;
+  const cls = days >= warnDays ? 'blocked-duration warning' : 'blocked-duration';
+  return `<div class="${cls}" title="In this status since ${new Date(cam.status_since).toLocaleString()}">${label} in ${cam.status}</div>`;
+}
+
+function renderUpdatesFeed(cam, k) {
+  const updates = (cam.updates || []).slice().reverse().slice(0, 5);
+  if (!updates.length) return '<div class="no-updates">No updates yet</div>';
+  return updates.map(u => `
+    <div class="update-entry">
+      <span class="update-author">${u.engineer || 'Unknown'}</span>
+      <span class="update-time">${fmtRel(u.time)}</span>
+      <div class="update-text">${u.text}</div>
+    </div>`).join('');
+}
+
+function render() {
+  buildStats();
+  const start = (page - 1) * PAGE, end = Math.min(start + PAGE, filtered.length);
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  filtered.slice(start, end).forEach(cam => {
+    const k = cam._key;
+    const tr = document.createElement('tr');
+        tr.id = 'row-' + k;
+    if (cam.status === 'No longer in use') tr.style.opacity = '0.5';
+    const latestEng = cam.updates && cam.updates.length ? cam.updates[cam.updates.length - 1] : null;
+    tr.innerHTML = `
+      <td style="white-space:nowrap;font-size:12px;font-weight:500;min-width:90px">${cam.site || ''}</td>
+      <td style="min-width:130px">
+        <div class="equip-name">${cam.equipment || ''}</div>
+        <div class="cam-id">${cam.id || ''}</div>
+        ${cam.type ? `<span class="type-pill">${cam.type}</span>` : ''}
+      </td>
+      <td style="min-width:170px">
+        <select class="status-sel" data-key="${k}" onchange="changeStatus(this)">
+          ${STATUSES.map(s => `<option value="${s}"${cam.status === s ? ' selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <div style="margin-top:4px"><span class="badge b-${STATUS_CLASS[cam.status] || 'active'}" id="badge-${k}">${cam.status || ''}</span></div>
+        ${statusDuration(cam)}
+      </td>
+      <td style="white-space:nowrap;font-size:12px;min-width:80px">${cam.engineer ? `<span style="font-weight:500">${cam.engineer}</span>` : '<span style="color:#bbb">—</span>'}</td>
+      <td style="min-width:150px">
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${['discovery','sampling','datareview'].map(m => {
+            const on = (cam.meetings||'').includes(m);
+            const lbl = m==='discovery'?'Discovery':m==='sampling'?'Sampling':'Data review';
+            return `<button onclick="toggleMeeting(${k},'${m}',this)" style="font-size:11px;padding:3px 10px;border-radius:999px;border:1.5px solid ${on?'#1D9E75':'#ddd'};background:${on?'#E1F5EE':'#fff'};color:${on?'#085041':'#aaa'};cursor:pointer;font-weight:${on?'600':'400'};transition:all 0.15s">${lbl}</button>`;
+          }).join('')}
+        </div>
+      </td>
+      <td style="min-width:210px">
+        <div id="eng-latest-${k}" style="font-size:11px;background:#EAF3DE;border-left:3px solid #3B6D11;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;${latestEng?'':'display:none'}">
+          ${latestEng ? `<strong style="color:#3B6D11;font-size:10px">${latestEng.engineer}</strong> <span style="font-size:10px;color:#aaa">${fmtRel(latestEng.time)}</span><div style="margin-top:2px;color:#333">${latestEng.text}</div>` : ''}
+        </div>
+        ${!latestEng ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
+
+        <button class="add-note-btn eng" onclick="openNoteModal('eng',${k})" style="margin-top:4px">+ Add note</button>
+      </td></td>
+      <td style="min-width:200px">
+        <div id="cs-latest-${k}" style="font-size:11px;background:#f0f6ff;border-left:3px solid #185FA5;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;${(cam.latest_team_note||cam.remarks)?'':'display:none'}">
+          ${cam.latest_team_note || ''}
+          ${cam.remarks && cam.remarks !== cam.latest_team_note ? `<div style="margin-top:3px;font-style:italic;color:#666;font-size:10px">${cam.remarks}</div>` : ''}
+        </div>
+        ${!(cam.latest_team_note||cam.remarks) ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
+
+        <button class="add-note-btn cs" onclick="openNoteModal('cs',${k})" style="margin-top:4px">+ Add note</button>
+      </td>
+      <td style="min-width:80px">${(cam.uom||'').split(',').filter(Boolean).map(u=>`<span class="uom-pill">${u}</span>`).join('')||'<span style="color:#bbb;font-size:11px">—</span>'}</td>
+      <td style="white-space:nowrap;font-size:12px;min-width:80px">${cam.vp || '<span style="color:#bbb">—</span>'}</td>
+      <td style="white-space:nowrap;min-width:90px">
+        <div class="ts-main">${fmtRel(cam.last_updated)}</div>
+        ${cam.last_updated ? `<div class="ts-full">${fmtDate(cam.last_updated)}</div>` : ''}
+      </td>
+      <td><button onclick="openEditModal(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555">Edit</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
+  document.getElementById('pginfo').textContent = `Page ${page} of ${pages} · ${filtered.length} cameras`;
+
+}
+
+window._lastEngineer = localStorage.getItem('ufp_last_engineer') || '';
+function rememberEngineer(val) {
+  if (val) { window._lastEngineer = val; localStorage.setItem('ufp_last_engineer', val); }
+}
+
+let _noteModalType = null;
+let _noteModalKey = null;
+
+function openNoteModal(type, k) {
+  _noteModalType = type;
+  _noteModalKey = k;
+  const cam = cameras[k];
+  const title = document.getElementById('noteModalTitle');
+  const sub = document.getElementById('noteModalSub');
+  const engSel = document.getElementById('noteModalEngineer');
+  const ta = document.getElementById('noteModalText');
+  const saveBtn = document.getElementById('noteModalSave');
+  ta.value = '';
+  if (type === 'eng') {
+    title.textContent = 'Add engineer note';
+    sub.textContent = cam.equipment + ' — ' + cam.site;
+    engSel.style.display = 'block';
+    engSel.value = window._lastEngineer || '';
+    saveBtn.textContent = 'Post note';
+    saveBtn.style.background = '#3B6D11';
+  } else {
+    title.textContent = 'Add CS note';
+    sub.textContent = cam.equipment + ' — ' + cam.site;
+    engSel.style.display = 'none';
+    saveBtn.textContent = 'Save note';
+    saveBtn.style.background = '#185FA5';
+  }
+  document.getElementById('noteModal').classList.add('open');
+  setTimeout(() => ta.focus(), 100);
+}
+
+function closeNoteModal() {
+  document.getElementById('noteModal').classList.remove('open');
+  _noteModalType = null;
+  _noteModalKey = null;
+}
+
+async function submitNoteModal() {
+  const k = _noteModalKey;
+  const type = _noteModalType;
+  const text = document.getElementById('noteModalText').value.trim();
+  if (!text) { document.getElementById('noteModalText').style.borderColor = '#A32D2D'; setTimeout(() => document.getElementById('noteModalText').style.borderColor = '', 2000); return; }
+  const saveBtn = document.getElementById('noteModalSave');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+  if (type === 'eng') {
+    const engineer = document.getElementById('noteModalEngineer').value;
+    if (!engineer) { document.getElementById('noteModalEngineer').style.borderColor = '#A32D2D'; setTimeout(() => document.getElementById('noteModalEngineer').style.borderColor = '', 2000); saveBtn.disabled = false; saveBtn.textContent = 'Post note'; return; }
+    rememberEngineer(engineer);
+    setSyncState('syncing', 'Saving...');
+    try {
+      await apiPost({ action: 'addUpdate', id: cameras[k].id, engineer, text });
+      const entry = { engineer, text, time: new Date().toISOString() };
+      if (!cameras[k].updates) cameras[k].updates = [];
+      cameras[k].updates.push(entry);
+      cameras[k].last_updated = entry.time;
+      if (!cameras[k].noteHistory) cameras[k].noteHistory = [];
+      cameras[k].noteHistory.push({ text, engineer, isStatus: false, isUpdate: true, time: entry.time });
+      const engEl = document.getElementById('eng-latest-' + k);
+      if (engEl) { engEl.innerHTML = `<strong style="color:#3B6D11;font-size:10px">${engineer}</strong> <span style="font-size:10px;color:#aaa">just now</span><div style="margin-top:2px;color:#333">${text}</div>`; engEl.style.display = 'block'; }
+      setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+      flashRow(k);
+      closeNoteModal();
+    } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save: ' + e.message); }
+  } else {
+    setSyncState('syncing', 'Saving...');
+    try {
+      await apiPost({ action: 'updateCamera', id: cameras[k].id, noteText: text, historyText: text, historyIsStatus: false });
+      cameras[k].latest_team_note = text;
+      cameras[k].last_updated = new Date().toISOString();
+      if (!cameras[k].noteHistory) cameras[k].noteHistory = [];
+      cameras[k].noteHistory.push({ text, engineer: '', isStatus: false, isUpdate: false, time: cameras[k].last_updated });
+      const csEl = document.getElementById('cs-latest-' + k);
+      if (csEl) { csEl.textContent = text; csEl.style.display = 'block'; }
+      setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+      flashRow(k);
+      closeNoteModal();
+    } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save: ' + e.message); }
+  }
+  saveBtn.disabled = false;
+}
+
+document.getElementById('noteModal').addEventListener('click', function(e) { if (e.target === this) closeNoteModal(); });
+
+// Allow Ctrl+Enter to submit
+document.getElementById('noteModalText').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitNoteModal();
+});
+
+async function toggleMeeting(k, meeting, btn) {
+  const cam = cameras[k];
+  let meetings = (cam.meetings || '').split(',').filter(Boolean);
+  if (meetings.includes(meeting)) {
+    meetings = meetings.filter(m => m !== meeting);
+    btn.style.background = '#f9f9f7'; btn.style.color = '#888';
+    btn.style.borderColor = '#ddd'; btn.style.fontWeight = '400';
+  } else {
+    meetings.push(meeting);
+    btn.style.background = '#E1F5EE'; btn.style.color = '#0F6E56';
+    btn.style.borderColor = '#9FE1CB'; btn.style.fontWeight = '600';
+  }
+  cam.meetings = meetings.join(',');
+  setSyncState('syncing', 'Saving...');
+  try {
+    await apiPost({ action: 'updateCamera', id: cam.id, meetings: cam.meetings, historyText: 'Meetings updated: ' + (cam.meetings || 'none'), historyIsStatus: false });
+    setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+  
+  } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save: ' + e.message); }
+}
+
+async function saveUpdate(k) {
+  const eng = document.getElementById('upd-eng-' + k);
+  const ta = document.getElementById('upd-text-' + k);
+  const btn = document.getElementById('upd-btn-' + k);
+  if (!eng || !ta) return;
+  const engineer = eng.value;
+  const text = ta.value.trim();
+  if (!engineer) { eng.style.borderColor = '#A32D2D'; setTimeout(() => eng.style.borderColor = '', 2000); return; }
+  if (!text) { ta.style.borderColor = '#A32D2D'; setTimeout(() => ta.style.borderColor = '', 2000); return; }
+  btn.disabled = true; btn.textContent = '...';
+  setSyncState('syncing', 'Saving...');
+  const entry = { engineer, text, time: new Date().toISOString() };
+  try {
+    await apiPost({ action: 'addUpdate', id: cameras[k].id, engineer, text });
+    if (!cameras[k].updates) cameras[k].updates = [];
+    cameras[k].updates.push(entry);
+    cameras[k].last_updated = entry.time;
+    // Also push to noteHistory so view history works immediately
+    if (!cameras[k].noteHistory) cameras[k].noteHistory = [];
+    cameras[k].noteHistory.push({ text, engineer, isStatus: false, time: entry.time });
+    ta.value = '';
+    rememberEngineer(engineer);
+    setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    // Re-render the latest engineer note display in the cell
+    const updatesCell = document.querySelector(`td[data-col="updates"] .history-log`);
+    const latestDiv = document.getElementById('eng-latest-' + k);
+    if (latestDiv) {
+      latestDiv.style.display = 'block';
+      latestDiv.innerHTML = `<strong style="color:#3B6D11;font-size:10px">${engineer}</strong> <span style="font-size:10px;color:#aaa">just now</span><div style="margin-top:2px;color:#333">${text}</div>`;
+    }
+    // Re-render full row to update latest note
+    applyFilters();
+    flashRow(k);
+  } catch (e) {
+    setSyncState('error', 'Save failed');
+    showError('Could not save update: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Post';
+  }
+}
+
+async function saveNote(k) {
+  const ta = document.getElementById('noteinput-' + k);
+  if (!ta || !ta.value.trim()) return;
+  const text = ta.value.trim();
+  const btn = ta.parentElement.querySelector('.save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  setSyncState('syncing', 'Saving...');
+  try {
+    await apiPost({ action: 'updateCamera', id: cameras[k].id, noteText: text, historyText: text, historyIsStatus: false });
+    cameras[k].last_updated = new Date().toISOString();
+    cameras[k].latest_team_note = text;
+    if (!cameras[k].noteHistory) cameras[k].noteHistory = [];
+    cameras[k].noteHistory.push({ text, engineer: '', isStatus: false, time: cameras[k].last_updated });
+    ta.value = '';
+    setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    const csLatest = document.getElementById('cs-latest-' + k);
+    if (csLatest) { csLatest.style.display = 'block'; csLatest.textContent = text; }
+    flashRow(k);
+  } catch (e) {
+    setSyncState('error', 'Save failed');
+    showError('Could not save note: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save note';
+  }
+}
+
+async function changeStatus(sel) {
+  const k = parseInt(sel.dataset.key);
+  const oldStatus = cameras[k].status;
+  const newStatus = sel.value;
+  cameras[k].status = newStatus;
+  cameras[k].status_since = new Date().toISOString();
+  const badge = document.getElementById('badge-' + k);
+  if (badge) { badge.className = 'badge b-' + (STATUS_CLASS[newStatus] || 'active'); badge.textContent = newStatus; }
+  setSyncState('syncing', 'Saving...');
+  try {
+    await apiPost({ action: 'updateCamera', id: cameras[k].id, status: newStatus, status_since: cameras[k].status_since, historyText: oldStatus + ' → ' + newStatus, historyIsStatus: true });
+    cameras[k].last_updated = new Date().toISOString();
+    setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    flashRow(k); buildStats(); render();
+  } catch (e) {
+    cameras[k].status = oldStatus;
+    sel.value = oldStatus;
+    setSyncState('error', 'Save failed');
+    showError('Could not update status: ' + e.message);
+  }
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+document.getElementById('search').addEventListener('input', applyFilters);
+document.getElementById('filterSite').addEventListener('change', applyFilters);
+document.getElementById('filterStatus').addEventListener('change', function(e) {
+  statFilter = e.target.value; buildStats(); applyFilters();
+});
+document.getElementById('filterType').addEventListener('change', applyFilters);
+const vpFilterEl = document.getElementById('filterVP');
+if (vpFilterEl) vpFilterEl.addEventListener('change', applyFilters);
+document.getElementById('noteModal').addEventListener('click', function(e) { if (e.target === this) closeNoteModal(); });
+document.getElementById('noteModalText').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitNoteModal();
+});
+document.getElementById('addModal').addEventListener('click', function(e) { if (e.target === this) closeAddModal(); });
+document.getElementById('editModal').addEventListener('click', function(e) { if (e.target === this) closeEditModal(); });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+const savedUrl = getScriptUrl();
+if (savedUrl) {
+  document.getElementById('configBanner').style.display = 'none';
+  loadCameras();
+} else {
+  document.getElementById('loadingBanner').textContent = 'Paste your Apps Script URL above to get started.';
+}
+setInterval(() => { if (getScriptUrl()) loadCameras(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
