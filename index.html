@@ -611,10 +611,10 @@ function buildStats() {
   });
   statsBase.forEach(c => counts[c.status] = (counts[c.status] || 0) + 1);
   const el = document.getElementById('statsRow');
-  el.innerHTML = `<div class="stat ${statFilter === '' ? 'active-filter' : ''}" onclick="setStatFilter('')"><div class="stat-label">Total</div><div class="stat-val c-gray">${statsBase.length}</div></div>`;
+  el.innerHTML = `<div class="stat ${statFilter === '' ? 'active-filter' : ''}" onclick="setStatFilter('')" style="cursor:pointer"><div class="stat-label">Total</div><div class="stat-val c-gray">${statsBase.length}</div></div>`;
   Object.entries(counts).forEach(([s, n]) => {
     if (!n) return;
-    el.innerHTML += `<div class="stat ${statFilter === s ? 'active-filter' : ''}" onclick="setStatFilter(${JSON.stringify(s)})" style="cursor:pointer"><div class="stat-label">${s}</div><div class="stat-val ${STAT_COLORS[s] || 'c-gray'}">${n}</div></div>`;
+    el.innerHTML += `<div class="stat ${statFilter === s ? 'active-filter' : ''}" onclick="setStatFilter('${s.replace(/'/g, "\'")}')" style="cursor:pointer"><div class="stat-label">${s}</div><div class="stat-val ${STAT_COLORS[s] || 'c-gray'}">${n}</div></div>`;
   });
   document.getElementById('headerCount').textContent = statsBase.length;
 }
@@ -1415,12 +1415,16 @@ async function clearNote(type, k) {
     cameras[k].latest_team_note = '';
     const el = document.getElementById('cs-latest-' + k);
     if (el) el.style.display = 'none';
-    // Write empty note to sheet
-    try { await apiPost({ action: 'updateCamera', id: cameras[k].id, historyText: 'Note cleared', historyIsStatus: true }); } catch(e) {}
+    // Write a blank note to history so getCameras picks up empty as latest
+    apiPost({ action: 'updateCamera', id: cameras[k].id, noteText: '', historyText: 'Note cleared', historyIsStatus: true })
+      .catch(e => showError('Could not clear note: ' + e.message));
   } else {
     cameras[k].updates = [];
     const el = document.getElementById('eng-latest-' + k);
     if (el) el.style.display = 'none';
+    // Write a system entry to push the latest update off
+    apiPost({ action: 'updateCamera', id: cameras[k].id, historyText: 'Engineer note cleared', historyIsStatus: true })
+      .catch(e => showError('Could not clear note: ' + e.message));
   }
 }
 
