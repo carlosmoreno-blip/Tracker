@@ -1017,7 +1017,8 @@ function render() {
         </div>
       </td>
       <td style="min-width:210px">
-        <div id="eng-latest-${k}" style="font-size:11px;background:#EAF3DE;border-left:3px solid #3B6D11;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;${latestEng?'':'display:none'}">
+        <div id="eng-latest-${k}" style="font-size:11px;background:#EAF3DE;border-left:3px solid #3B6D11;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;position:relative;${latestEng?'':'display:none'}">
+          <button onclick="clearNote('eng',${k})" title="Clear note" style="position:absolute;top:3px;right:5px;background:none;border:none;cursor:pointer;font-size:11px;color:#aaa;line-height:1">&#x2715;</button>
           ${latestEng ? `<strong style="color:#3B6D11;font-size:10px">${latestEng.engineer}</strong> <span style="font-size:10px;color:#aaa">${fmtRel(latestEng.time)}</span><div style="margin-top:2px;color:#333">${latestEng.text}</div>` : ''}
         </div>
         ${!latestEng ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
@@ -1025,7 +1026,8 @@ function render() {
         <button class="add-note-btn eng" onclick="openNoteModal('eng',${k})" style="margin-top:4px">+ Add note</button>
       </td></td>
       <td style="min-width:200px">
-        <div id="cs-latest-${k}" style="font-size:11px;background:#f0f6ff;border-left:3px solid #185FA5;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;${(cam.latest_team_note||cam.remarks)?'':'display:none'}">
+        <div id="cs-latest-${k}" style="font-size:11px;background:#f0f6ff;border-left:3px solid #185FA5;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;position:relative;${(cam.latest_team_note||cam.remarks)?'':'display:none'}">
+          <button onclick="clearNote('cs',${k})" title="Clear note" style="position:absolute;top:3px;right:5px;background:none;border:none;cursor:pointer;font-size:11px;color:#aaa;line-height:1">&#x2715;</button>
           ${cam.latest_team_note || ''}
           ${cam.remarks && cam.remarks !== cam.latest_team_note ? `<div style="margin-top:3px;font-style:italic;color:#666;font-size:10px">${cam.remarks}</div>` : ''}
         </div>
@@ -1096,7 +1098,6 @@ async function submitNoteModal() {
   const text = document.getElementById('noteModalText').value.trim();
   if (!text) { document.getElementById('noteModalText').style.borderColor = '#A32D2D'; setTimeout(() => document.getElementById('noteModalText').style.borderColor = '', 2000); return; }
   const saveBtn = document.getElementById('noteModalSave');
-  saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
   if (type === 'eng') {
     const engineer = document.getElementById('noteModalEngineer').value;
     if (!engineer) { document.getElementById('noteModalEngineer').style.borderColor = '#A32D2D'; setTimeout(() => document.getElementById('noteModalEngineer').style.borderColor = '', 2000); saveBtn.disabled = false; saveBtn.textContent = 'Post note'; return; }
@@ -1131,7 +1132,6 @@ async function submitNoteModal() {
       closeNoteModal();
     } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save: ' + e.message); }
   }
-  saveBtn.disabled = false;
 }
 
 document.getElementById('noteModal').addEventListener('click', function(e) { if (e.target === this) closeNoteModal(); });
@@ -1156,7 +1156,7 @@ async function toggleMeeting(k, meeting, btn) {
   cam.meetings = meetings.join(',');
   setSyncState('syncing', 'Saving...');
   try {
-    await apiPost({ action: 'updateCamera', id: cam.id, meetings: cam.meetings, historyText: 'Meetings updated: ' + (cam.meetings || 'none'), historyIsStatus: false });
+    await apiPost({ action: 'updateCamera', id: cam.id, meetings: cam.meetings, historyText: 'Meetings updated: ' + (cam.meetings || 'none'), historyIsStatus: true });
     setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
   
   } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save: ' + e.message); }
@@ -1233,22 +1233,25 @@ async function changeStatus(sel) {
   const k = parseInt(sel.dataset.key);
   const oldStatus = cameras[k].status;
   const newStatus = sel.value;
+  // Update UI instantly
   cameras[k].status = newStatus;
   cameras[k].status_since = new Date().toISOString();
+  cameras[k].last_updated = new Date().toISOString();
   const badge = document.getElementById('badge-' + k);
   if (badge) { badge.className = 'badge b-' + (STATUS_CLASS[newStatus] || 'active'); badge.textContent = newStatus; }
-  setSyncState('syncing', 'Saving...');
-  try {
-    await apiPost({ action: 'updateCamera', id: cameras[k].id, status: newStatus, status_since: cameras[k].status_since, historyText: oldStatus + ' → ' + newStatus, historyIsStatus: true });
-    cameras[k].last_updated = new Date().toISOString();
-    setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
-    flashRow(k); buildStats(); render();
-  } catch (e) {
-    cameras[k].status = oldStatus;
-    sel.value = oldStatus;
-    setSyncState('error', 'Save failed');
-    showError('Could not update status: ' + e.message);
-  }
+  flashRow(k); buildStats(); render();
+  // Save in background silently
+  apiPost({ action: 'updateCamera', id: cameras[k].id, status: newStatus, status_since: cameras[k].status_since, historyText: oldStatus + ' → ' + newStatus, historyIsStatus: true })
+    .then(() => setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })))
+    .catch(e => {
+      cameras[k].status = oldStatus;
+      sel.value = oldStatus;
+      const badge = document.getElementById('badge-' + k);
+      if (badge) { badge.className = 'badge b-' + (STATUS_CLASS[oldStatus] || 'active'); badge.textContent = oldStatus; }
+      setSyncState('error', 'Save failed');
+      showError('Could not update status: ' + e.message);
+      buildStats(); render();
+    });
 }
 
 // ── Utility functions ────────────────────────────────────────────────────────
@@ -1400,6 +1403,21 @@ async function submitEditCamera() {
     await loadCameras();
   } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save changes: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Save changes'; }
+}
+
+async function clearNote(type, k) {
+  if (!confirm('Clear this note from the display?')) return;
+  if (type === 'cs') {
+    cameras[k].latest_team_note = '';
+    const el = document.getElementById('cs-latest-' + k);
+    if (el) el.style.display = 'none';
+    // Write empty note to sheet
+    try { await apiPost({ action: 'updateCamera', id: cameras[k].id, historyText: 'Note cleared', historyIsStatus: true }); } catch(e) {}
+  } else {
+    cameras[k].updates = [];
+    const el = document.getElementById('eng-latest-' + k);
+    if (el) el.style.display = 'none';
+  }
 }
 
 // ── Event listeners ───────────────────────────────────────────────────────────
