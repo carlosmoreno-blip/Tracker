@@ -194,9 +194,9 @@
   <div style="display:flex;align-items:center;gap:16px">
     <div style="width:4px;height:36px;background:#185FA5;border-radius:2px;flex-shrink:0"></div>
     <div>
-      <h1>UFP — AI Camera Tracker</h1>
+      <h1>AI Camera Tracker</h1>
       <div class="header-meta">
-        <span>Packaging Division · <span id="headerCount">—</span> cameras</span>
+        <span>Packaging · <span id="headerCount">—</span> cameras</span>
         <div class="sync-indicator">
           <div class="sync-dot" id="syncDot"></div>
           <span id="syncLabel">Loading...</span>
@@ -558,7 +558,7 @@ async function loadCameras() {
       updates: c.updates || [],
       status_since: c.status_since || c.blocked_since || '',
       // Seed latest_team_note from Sheet notes field if no history note yet
-      latest_team_note: c.latest_team_note || c.notes || ''
+      latest_team_note: c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || ''
     }));
     setSyncState('ok', 'Live · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
     document.getElementById('loadingBanner').style.display = 'none';
@@ -1413,10 +1413,11 @@ async function clearNote(type, k) {
   if (!confirm('Clear this note from the display?')) return;
   if (type === 'cs') {
     cameras[k].latest_team_note = '';
+    cameras[k].notes = ''; // prevent re-seed from notes column
     const el = document.getElementById('cs-latest-' + k);
     if (el) el.style.display = 'none';
     // Write a blank note to history so getCameras picks up empty as latest
-    apiPost({ action: 'updateCamera', id: cameras[k].id, noteText: '', historyText: 'Note cleared', historyIsStatus: true })
+    apiPost({ action: 'updateCamera', id: cameras[k].id, clearNote: true, historyText: 'Note cleared', historyIsStatus: true })
       .catch(e => showError('Could not clear note: ' + e.message));
   } else {
     cameras[k].updates = [];
