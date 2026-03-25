@@ -1287,21 +1287,6 @@ function flashRow(k) {
 function prevPage() { if (page > 1) { page--; render(); } }
 function nextPage() { if (page < Math.ceil(filtered.length / PAGE)) { page++; render(); } }
 
-function showError(msg) {
-  const el = document.getElementById('errorBanner');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', 8000);
-}
-
-function setSyncState(state, label) {
-  const dot = document.getElementById('syncDot');
-  const lbl = document.getElementById('syncLabel');
-  if (dot) dot.className = 'sync-dot' + (state === 'syncing' ? ' syncing' : state === 'error' ? ' error' : '');
-  if (lbl) lbl.textContent = label;
-}
-
 // ── Add Camera Modal ─────────────────────────────────────────────────────────
 function openAddModal() {
   try {
@@ -1375,6 +1360,8 @@ let editKey = null;
 function openEditModal(k) {
   editKey = k;
   const cam = cameras[k];
+  // Store ID at open time for reliable save
+  document.getElementById('editModal').dataset.cameraId = cam.id;
   document.getElementById('e-site').value = cam.site || '';
   document.getElementById('e-equip').value = cam.equipment || '';
   document.getElementById('e-id').value = cam.id || '';
@@ -1404,14 +1391,11 @@ function openEditModal(k) {
 function closeEditModal() { document.getElementById('editModal').classList.remove('open'); editKey = null; }
 
 async function submitEditCamera() {
-  if (editKey === null) return;
-  // Re-find camera by ID in case array was re-indexed after duplicate
-  const editId = cameras[editKey] ? cameras[editKey].id : null;
-  let k = editKey;
-  if (editId) {
-    const found = cameras.findIndex(c => c.id === editId);
-    if (found >= 0) k = found;
-  }
+  // Find camera by stored ID — most reliable approach
+  const storedId = document.getElementById('editModal').dataset.cameraId;
+  let k = cameras.findIndex(c => c.id === storedId);
+  if (k < 0) k = editKey; // fallback
+  if (k < 0 || !cameras[k]) { showError('Camera not found — please close and try again.'); return; }
   const site = document.getElementById('e-site').value.trim();
   const equip = document.getElementById('e-equip').value.trim();
   if (!site || !equip) { alert('Site and equipment name are required.'); return; }
