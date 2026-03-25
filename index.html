@@ -1405,7 +1405,13 @@ function closeEditModal() { document.getElementById('editModal').classList.remov
 
 async function submitEditCamera() {
   if (editKey === null) return;
-  const k = editKey;
+  // Re-find camera by ID in case array was re-indexed after duplicate
+  const editId = cameras[editKey] ? cameras[editKey].id : null;
+  let k = editKey;
+  if (editId) {
+    const found = cameras.findIndex(c => c.id === editId);
+    if (found >= 0) k = found;
+  }
   const site = document.getElementById('e-site').value.trim();
   const equip = document.getElementById('e-equip').value.trim();
   if (!site || !equip) { alert('Site and equipment name are required.'); return; }
@@ -1449,8 +1455,11 @@ async function duplicateCamera(k) {
     cameras.push(copy);
     setSyncState('ok', 'Duplicated — edit to set unique ID');
     populateSites(); populateVPs(); applyFilters();
-    // Open edit modal on the new camera so user can immediately update ID/name
-    setTimeout(() => openEditModal(copy._key), 400);
+    // Find the new camera's index after render and open edit modal
+    setTimeout(() => {
+      const newKey = cameras.findIndex(c => c.id === newId);
+      if (newKey >= 0) openEditModal(newKey);
+    }, 400);
   } catch(e) { setSyncState('error', 'Duplicate failed'); showError('Could not duplicate: ' + e.message); }
 }
 
@@ -1504,8 +1513,8 @@ async function clearNote(type, k) {
     cameras[k].updates = [];
     const el = document.getElementById('eng-latest-' + k);
     if (el) el.style.display = 'none';
-    // Write a system entry to push the latest update off
-    apiPost({ action: 'updateCamera', id: cameras[k].id, historyText: 'Engineer note cleared', historyIsStatus: true })
+    // Write a blank isUpdate entry so getCameras stops returning old updates
+    apiPost({ action: 'clearEngNote', id: cameras[k].id })
       .catch(e => showError('Could not clear note: ' + e.message));
   }
 }
