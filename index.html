@@ -395,7 +395,7 @@
       </div>
       <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
         <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
-        <button class="btn-save" id="editSaveBtn" onclick="submitEditCamera()">Save changes</button>
+        <button class="btn-save" id="editSaveBtn" onclick="console.log('btn clicked');submitEditCamera()">Save changes</button>
       </div>
     </div>
   </div>
@@ -1391,10 +1391,14 @@ function openEditModal(k) {
 function closeEditModal() { document.getElementById('editModal').classList.remove('open'); editKey = null; }
 
 async function submitEditCamera() {
+  console.log('submitEditCamera called, editKey:', editKey);
+  const modal = document.getElementById('editModal');
+  console.log('storedId:', modal ? modal.dataset.cameraId : 'no modal');
   // Find camera by stored ID — most reliable approach
-  const storedId = document.getElementById('editModal').dataset.cameraId;
+  const storedId = modal ? modal.dataset.cameraId : null;
   let k = cameras.findIndex(c => c.id === storedId);
   if (k < 0) k = editKey; // fallback
+  console.log('k:', k, 'cameras.length:', cameras.length);
   if (k < 0 || !cameras[k]) { showError('Camera not found — please close and try again.'); return; }
   const site = document.getElementById('e-site').value.trim();
   const equip = document.getElementById('e-equip').value.trim();
