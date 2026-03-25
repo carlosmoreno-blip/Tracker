@@ -39,7 +39,7 @@
   tbody tr:hover { background: #f7f9ff; }
   td { padding: 7px 10px; vertical-align: top; }
   .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; letter-spacing: 0.1px; }
-  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-notmounted{background:#FAEEDA;color:#854F0B}.b-reposition{background:#EEEDFE;color:#3C3489}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
+  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-notmounted{background:#FAEEDA;color:#854F0B}.b-reposition{background:#EEEDFE;color:#3C3489}.b-pendingcount{background:#FFF0D6;color:#7A4A00}.b-pendingmeasure{background:#FDE8FF;color:#6B0F8A}.b-waitingeng{background:#E8F4FF;color:#0A4D8A}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
   .b-pending{background:#FFF3D6;color:#BA7517}.b-review{background:#FAECE7;color:#993C1D}
   .b-calibration{background:#E6F1FB;color:#185FA5}.b-sampling{background:#EEEDFE;color:#3C3489}
   .b-completed{background:#E1F5EE;color:#0F6E56}.b-offline{background:#F1EFE8;color:#5F5E5A}
@@ -252,6 +252,7 @@
         <th class="col-sort" onclick="sortBy('status',this)">Status</th>
         <th class="col-sort" onclick="sortBy('engineer',this)">AI Engineer</th>
         <th>Meetings</th>
+        <th>Verification</th>
         <th>Engineer Notes</th>
         <th>CS Notes</th>
         <th>Unit of measure</th>
@@ -394,6 +395,13 @@
           <label class="meeting-check"><input type="checkbox" id="e-meet-support"> Support</label>
         </div>
       </div>
+      <div class="field-group full">
+        <label>Verification</label>
+        <div class="meeting-checks">
+          <label class="meeting-check"><input type="checkbox" id="e-verif-count"> Count Verified</label>
+          <label class="meeting-check"><input type="checkbox" id="e-verif-measure"> Measure Verified</label>
+        </div>
+      </div>
       <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
         <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
         <button class="btn-save" id="editSaveBtn" onclick="submitEditCamera()">Save changes</button>
@@ -481,6 +489,13 @@
           <label class="meeting-check"><input type="checkbox" id="m-meet-support"> Support</label>
         </div>
       </div>
+      <div class="field-group full">
+        <label>Verification</label>
+        <div class="meeting-checks">
+          <label class="meeting-check"><input type="checkbox" id="m-verif-count"> Count Verified</label>
+          <label class="meeting-check"><input type="checkbox" id="m-verif-measure"> Measure Verified</label>
+        </div>
+      </div>
       <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
         <button class="btn-cancel" onclick="closeAddModal()">Cancel</button>
         <button class="btn-save" id="addSaveBtn" onclick="submitAddCamera()">Add camera</button>
@@ -490,9 +505,9 @@
 </div>
 
 <script>
-const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Camera reposition requested','Completed','Offline','Not mounted','No longer in use'];
-const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger','Not mounted':'notmounted','Camera reposition requested':'reposition'};
-const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray','Not mounted':'c-amber','Camera reposition requested':'c-purple'};
+const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Camera reposition requested','Pending Customer Count Validation','Customer Pending Measure Validation','Waiting on Engineering Feedback','Completed','Offline','Not mounted','No longer in use'];
+const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger','Not mounted':'notmounted','Camera reposition requested':'reposition','Pending Customer Count Validation':'pendingcount','Customer Pending Measure Validation':'pendingmeasure','Waiting on Engineering Feedback':'waitingeng'};
+const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray','Not mounted':'c-amber','Camera reposition requested':'c-purple','Pending Customer Count Validation':'c-amber','Customer Pending Measure Validation':'c-purple','Waiting on Engineering Feedback':'c-blue'};
 const URL_KEY = 'ufp_script_url';
 
 let cameras = [], filtered = [], sortCol = 'site', sortDir = 'asc', page = 1, statFilter = '';
@@ -574,6 +589,7 @@ async function loadCameras() {
       historyLoaded: false,
       updates: c.updates || [],
       status_since: c.status_since || c.blocked_since || '',
+      verification: c.verification || '',
       // Seed latest_team_note from Sheet notes field if no history note yet
       latest_team_note: c.note_from_history ? (c.latest_team_note || '') : (c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || '')
     }));
@@ -1037,6 +1053,15 @@ function render() {
           }).join('')}
         </div>
       </td>
+      <td style="min-width:140px">
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${['countverified','measureverified'].map(v => {
+            const on = (cam.verification||'').includes(v);
+            const lbl = v==='countverified'?'Count Verified':'Measure Verified';
+            return `<button onclick="toggleVerification(${k},'${v}',this)" style="font-size:11px;padding:3px 10px;border-radius:999px;border:1.5px solid ${on?'#185FA5':'#ddd'};background:${on?'#E6F1FB':'#fff'};color:${on?'#0C447C':'#aaa'};cursor:pointer;font-weight:${on?'600':'400'};transition:all 0.15s">${lbl}</button>`;
+          }).join('')}
+        </div>
+      </td>
       <td style="min-width:210px">
         <div id="eng-latest-${k}" style="font-size:11px;background:#EAF3DE;border-left:3px solid #3B6D11;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;position:relative;${latestEng?'':'display:none'}">
           <button onclick="clearNote('eng',${k})" title="Clear note" style="position:absolute;top:3px;right:5px;background:none;border:none;cursor:pointer;font-size:11px;color:#aaa;line-height:1">&#x2715;</button>
@@ -1166,6 +1191,24 @@ document.getElementById('noteModalText').addEventListener('keydown', function(e)
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitNoteModal();
 });
 
+async function toggleVerification(k, v, btn) {
+  const cam = cameras[k];
+  let verif = (cam.verification || '').split(',').filter(Boolean);
+  if (verif.includes(v)) {
+    verif = verif.filter(x => x !== v);
+    btn.style.background = '#fff'; btn.style.color = '#aaa';
+    btn.style.borderColor = '#ddd'; btn.style.fontWeight = '400';
+  } else {
+    verif.push(v);
+    btn.style.background = '#E6F1FB'; btn.style.color = '#0C447C';
+    btn.style.borderColor = '#185FA5'; btn.style.fontWeight = '600';
+  }
+  cam.verification = verif.join(',');
+  apiPost({ action: 'updateCamera', id: cam.id, verification: cam.verification, historyText: 'Verification updated', historyIsStatus: true })
+    .then(() => setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })))
+    .catch(e => { setSyncState('error', 'Save failed'); showError('Could not save: ' + e.message); });
+}
+
 async function toggleMeeting(k, meeting, btn) {
   const cam = cameras[k];
   let meetings = (cam.meetings || '').split(',').filter(Boolean);
@@ -1294,7 +1337,7 @@ function openAddModal() {
     populateModalSites();
     const ms = document.getElementById('m-status');
     if (ms) ms.innerHTML = STATUSES.map(s => `<option value="${s}"${s === 'Active' ? ' selected' : ''}>${s}</option>`).join('');
-    ['m-meet-discovery','m-meet-sampling','m-meet-datareview','m-meet-support','m-uom-unit','m-uom-pallet','m-uom-cuts','m-uom-lf','m-uom-bf','m-uom-cycle'].forEach(id => { const el=document.getElementById(id); if(el) el.checked=false; });
+    ['m-meet-discovery','m-meet-sampling','m-meet-datareview','m-meet-support','m-uom-unit','m-uom-pallet','m-uom-cuts','m-uom-lf','m-uom-bf','m-uom-cycle','m-verif-count','m-verif-measure'].forEach(id => { const el=document.getElementById(id); if(el) el.checked=false; });
     ['m-site-sel','m-equip','m-id','m-type','m-engineer','m-vp','m-wc','m-notes','m-remarks','m-site-text'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     const snr = document.getElementById('m-site-new-row'); if(snr) snr.style.display='none';
     const es = document.getElementById('err-site'); if(es) es.style.display='none';
@@ -1334,6 +1377,9 @@ async function submitAddCamera() {
   if (document.getElementById('m-meet-sampling').checked) addMeetings.push('sampling');
   if (document.getElementById('m-meet-datareview').checked) addMeetings.push('datareview');
   if (document.getElementById('m-meet-support').checked) addMeetings.push('support');
+  const addVerif = [];
+  const mvc = document.getElementById('m-verif-count'); if(mvc && mvc.checked) addVerif.push('countverified');
+  const mvm = document.getElementById('m-verif-measure'); if(mvm && mvm.checked) addVerif.push('measureverified');
   const addUom = [];
   if (document.getElementById('m-uom-unit').checked) addUom.push('Unit');
   if (document.getElementById('m-uom-pallet').checked) addUom.push('Pallet');
@@ -1341,7 +1387,7 @@ async function submitAddCamera() {
   if (document.getElementById('m-uom-lf').checked) addUom.push('LF');
   if (document.getElementById('m-uom-bf').checked) addUom.push('BF');
   if (document.getElementById('m-uom-cycle').checked) addUom.push('Cycle');
-  const newCam = { id: idVal || autoId, site, equipment: equip, type: document.getElementById('m-type').value, engineer: document.getElementById('m-engineer').value, vp: document.getElementById('m-vp').value.trim(), uom: addUom.join(','), meetings: addMeetings.join(','), status: document.getElementById('m-status').value, notes: document.getElementById('m-notes').value.trim(), remarks: document.getElementById('m-remarks').value.trim(), shifts: document.getElementById('m-wc').value.trim(), last_updated: new Date().toISOString() };
+  const newCam = { id: idVal || autoId, site, equipment: equip, type: document.getElementById('m-type').value, engineer: document.getElementById('m-engineer').value, vp: document.getElementById('m-vp').value.trim(), uom: addUom.join(','), meetings: addMeetings.join(','), verification: addVerif.join(','), status: document.getElementById('m-status').value, notes: document.getElementById('m-notes').value.trim(), remarks: document.getElementById('m-remarks').value.trim(), shifts: document.getElementById('m-wc').value.trim(), last_updated: new Date().toISOString() };
   const btn = document.getElementById('addSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving...';
   setSyncState('syncing', 'Saving...');
@@ -1387,6 +1433,9 @@ function openEditModal(k) {
   document.getElementById('e-meet-sampling').checked = meetings.includes('sampling');
   document.getElementById('e-meet-datareview').checked = meetings.includes('datareview');
   const ems = document.getElementById('e-meet-support'); if(ems) ems.checked = meetings.includes('support');
+  const verif = cam.verification || '';
+  const evc2 = document.getElementById('e-verif-count'); if(evc2) evc2.checked = verif.includes('countverified');
+  const evm2 = document.getElementById('e-verif-measure'); if(evm2) evm2.checked = verif.includes('measureverified');
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -1406,6 +1455,9 @@ async function submitEditCamera() {
   if (document.getElementById('e-meet-sampling').checked) meetingVals.push('sampling');
   if (document.getElementById('e-meet-datareview').checked) meetingVals.push('datareview');
   if (document.getElementById('e-meet-support').checked) meetingVals.push('support');
+  const verifVals = [];
+  const evc = document.getElementById('e-verif-count'); if(evc && evc.checked) verifVals.push('countverified');
+  const evm = document.getElementById('e-verif-measure'); if(evm && evm.checked) verifVals.push('measureverified');
   const uomVals = [];
   if (document.getElementById('e-uom-unit').checked) uomVals.push('Unit');
   if (document.getElementById('e-uom-pallet').checked) uomVals.push('Pallet');
@@ -1414,7 +1466,7 @@ async function submitEditCamera() {
   if (document.getElementById('e-uom-bf').checked) uomVals.push('BF');
   if (document.getElementById('e-uom-cycle').checked) uomVals.push('Cycle');
   const noteText = document.getElementById('e-notes').value.trim();
-  const updates = { action: 'updateCamera', id: cameras[k].id, site, equipment: equip, type: document.getElementById('e-type').value, engineer: document.getElementById('e-engineer').value, vp: document.getElementById('e-vp').value.trim(), uom: uomVals.join(','), meetings: meetingVals.join(','), shifts: document.getElementById('e-wc').value.trim(), status: document.getElementById('e-status').value, newId: document.getElementById('e-id').value.trim(), historyText: 'Camera details updated', historyIsStatus: true };
+  const updates = { action: 'updateCamera', id: cameras[k].id, site, equipment: equip, type: document.getElementById('e-type').value, engineer: document.getElementById('e-engineer').value, vp: document.getElementById('e-vp').value.trim(), uom: uomVals.join(','), meetings: meetingVals.join(','), verification: verifVals.join(','), shifts: document.getElementById('e-wc').value.trim(), status: document.getElementById('e-status').value, newId: document.getElementById('e-id').value.trim(), historyText: 'Camera details updated', historyIsStatus: true };
   const btn = document.getElementById('editSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving...';
   setSyncState('syncing', 'Saving...');
