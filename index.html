@@ -39,7 +39,7 @@
   tbody tr:hover { background: #f7f9ff; }
   td { padding: 7px 10px; vertical-align: top; }
   .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; letter-spacing: 0.1px; }
-  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-notmounted{background:#FAEEDA;color:#854F0B}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
+  .b-active{background:#EAF3DE;color:#3B6D11}.b-alert,.b-blocked-issue{background:#FCEBEB;color:#A32D2D}.b-nolonger{background:#F1EFE8;color:#5F5E5A;text-decoration:line-through}.b-notmounted{background:#FAEEDA;color:#854F0B}.b-reposition{background:#EEEDFE;color:#3C3489}.b-blocked{background:#FBEAF0;color:#72243E;font-weight:600}
   .b-pending{background:#FFF3D6;color:#BA7517}.b-review{background:#FAECE7;color:#993C1D}
   .b-calibration{background:#E6F1FB;color:#185FA5}.b-sampling{background:#EEEDFE;color:#3C3489}
   .b-completed{background:#E1F5EE;color:#0F6E56}.b-offline{background:#F1EFE8;color:#5F5E5A}
@@ -107,8 +107,8 @@
   .btn-save:hover { background: #333; }
   .err-msg { font-size: 11px; color: #A32D2D; display: none; }
   @media (max-width: 768px) { header h1 { font-size: 14px; } .stats { grid-template-columns: repeat(3, 1fr); } .modal-grid { grid-template-columns: 1fr; } .modal-grid .full { grid-column: 1; } }
-  .blocked-duration { display:inline-block; font-size:10px; font-weight:500; padding:2px 7px; border-radius:999px; background:#F1EFE8; color:#5F5E5A; border:1px solid #D3D1C7; margin-top:3px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
-  .blocked-duration.warning { background:#FCEBEB; color:#A32D2D; border-color:#F09595; }
+  .blocked-duration { display:inline-block; font-size:9px; font-weight:500; padding:1px 6px; border-radius:999px; background:#F1EFE8; color:#888; border:1px solid #e0e0de; margin-top:3px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+  .blocked-duration.warning { background:#FCEBEB; color:#A32D2D; border-color:#F09595; font-weight:600; }
   .weekly-report { display:none; padding: 0 0 40px; }
   .weekly-report.visible { display:block; }
   .wr-header { background:#0f1923; color:#fff; padding:20px 24px 18px; border-radius:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:flex-start; }
@@ -376,6 +376,7 @@
           <label class="meeting-check"><input type="checkbox" id="e-meet-discovery"> Discovery call</label>
           <label class="meeting-check"><input type="checkbox" id="e-meet-sampling"> Sampling</label>
           <label class="meeting-check"><input type="checkbox" id="e-meet-datareview"> Data review</label>
+          <label class="meeting-check"><input type="checkbox" id="e-meet-support"> Support</label>
         </div>
       </div>
       <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
@@ -462,6 +463,7 @@
           <label class="meeting-check"><input type="checkbox" id="m-meet-discovery"> Discovery call</label>
           <label class="meeting-check"><input type="checkbox" id="m-meet-sampling"> Sampling</label>
           <label class="meeting-check"><input type="checkbox" id="m-meet-datareview"> Data review</label>
+          <label class="meeting-check"><input type="checkbox" id="m-meet-support"> Support</label>
         </div>
       </div>
       <div class="full" style="display:flex;justify-content:flex-end;gap:8px;padding-top:16px;border-top:1px solid #eee;margin-top:8px">
@@ -473,9 +475,9 @@
 </div>
 
 <script>
-const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Completed','Offline','Not mounted','No longer in use'];
-const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger','Not mounted':'notmounted'};
-const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray','Not mounted':'c-amber'};
+const STATUSES = ['Active','Tracking - Pending Signoff','Needs Review','In Calibration','Sampling','Blocked','Camera reposition requested','Completed','Offline','Not mounted','No longer in use'];
+const STATUS_CLASS = {'Active':'active','Tracking - Pending Signoff':'pending','Needs Review':'review','In Calibration':'calibration','Sampling':'sampling','Blocked':'alert','Blocked':'blocked','Completed':'completed','Offline':'offline','No longer in use':'nolonger','Not mounted':'notmounted','Camera reposition requested':'reposition'};
+const STAT_COLORS = {'Active':'c-green','Blocked':'c-red','Blocked':'c-pink','Tracking - Pending Signoff':'c-orange','Needs Review':'c-amber','In Calibration':'c-blue','Sampling':'c-purple','Completed':'c-teal','Offline':'c-gray','No longer in use':'c-gray','Not mounted':'c-amber','Camera reposition requested':'c-purple'};
 const URL_KEY = 'ufp_script_url';
 
 let cameras = [], filtered = [], sortCol = 'site', sortDir = 'asc', page = 1, statFilter = '';
@@ -1013,9 +1015,9 @@ function render() {
       <td style="white-space:nowrap;font-size:12px;min-width:80px">${cam.engineer ? `<span style="font-weight:500">${cam.engineer}</span>` : '<span style="color:#bbb">—</span>'}</td>
       <td style="min-width:150px">
         <div style="display:flex;flex-wrap:wrap;gap:4px">
-          ${['discovery','sampling','datareview'].map(m => {
+          ${['discovery','sampling','datareview','support'].map(m => {
             const on = (cam.meetings||'').includes(m);
-            const lbl = m==='discovery'?'Discovery':m==='sampling'?'Sampling':'Data review';
+            const lbl = m==='discovery'?'Discovery':m==='sampling'?'Sampling':m==='datareview'?'Data review':'Support';
             return `<button onclick="toggleMeeting(${k},'${m}',this)" style="font-size:11px;padding:3px 10px;border-radius:999px;border:1.5px solid ${on?'#1D9E75':'#ddd'};background:${on?'#E1F5EE':'#fff'};color:${on?'#085041':'#aaa'};cursor:pointer;font-weight:${on?'600':'400'};transition:all 0.15s">${lbl}</button>`;
           }).join('')}
         </div>
@@ -1045,7 +1047,10 @@ function render() {
         <div class="ts-main">${fmtRel(cam.last_updated)}</div>
         ${cam.last_updated ? `<div class="ts-full">${fmtDate(cam.last_updated)}</div>` : ''}
       </td>
-      <td><button onclick="openEditModal(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555">Edit</button></td>
+      <td style="white-space:nowrap">
+        <button onclick="openEditModal(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555;margin-bottom:3px;display:block;width:100%">Edit</button>
+        <button onclick="duplicateCamera(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #B5D4F4;border-radius:5px;background:#E6F1FB;cursor:pointer;color:#185FA5;display:block;width:100%">Duplicate</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -1288,7 +1293,7 @@ function openAddModal() {
     populateModalSites();
     const ms = document.getElementById('m-status');
     if (ms) ms.innerHTML = STATUSES.map(s => `<option value="${s}"${s === 'Active' ? ' selected' : ''}>${s}</option>`).join('');
-    ['m-meet-discovery','m-meet-sampling','m-meet-datareview','m-uom-unit','m-uom-pallet','m-uom-cuts','m-uom-lf','m-uom-bf'].forEach(id => { const el=document.getElementById(id); if(el) el.checked=false; });
+    ['m-meet-discovery','m-meet-sampling','m-meet-datareview','m-meet-support','m-uom-unit','m-uom-pallet','m-uom-cuts','m-uom-lf','m-uom-bf','m-uom-cycle'].forEach(id => { const el=document.getElementById(id); if(el) el.checked=false; });
     ['m-site-sel','m-equip','m-id','m-type','m-engineer','m-vp','m-wc','m-notes','m-remarks','m-site-text'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     const snr = document.getElementById('m-site-new-row'); if(snr) snr.style.display='none';
     const es = document.getElementById('err-site'); if(es) es.style.display='none';
@@ -1327,12 +1332,14 @@ async function submitAddCamera() {
   if (document.getElementById('m-meet-discovery').checked) addMeetings.push('discovery');
   if (document.getElementById('m-meet-sampling').checked) addMeetings.push('sampling');
   if (document.getElementById('m-meet-datareview').checked) addMeetings.push('datareview');
+  if (document.getElementById('m-meet-support').checked) addMeetings.push('support');
   const addUom = [];
   if (document.getElementById('m-uom-unit').checked) addUom.push('Unit');
   if (document.getElementById('m-uom-pallet').checked) addUom.push('Pallet');
   if (document.getElementById('m-uom-cuts').checked) addUom.push('Cuts');
   if (document.getElementById('m-uom-lf').checked) addUom.push('LF');
   if (document.getElementById('m-uom-bf').checked) addUom.push('BF');
+  if (document.getElementById('m-uom-cycle').checked) addUom.push('Cycle');
   const newCam = { id: idVal || autoId, site, equipment: equip, type: document.getElementById('m-type').value, engineer: document.getElementById('m-engineer').value, vp: document.getElementById('m-vp').value.trim(), uom: addUom.join(','), meetings: addMeetings.join(','), status: document.getElementById('m-status').value, notes: document.getElementById('m-notes').value.trim(), remarks: document.getElementById('m-remarks').value.trim(), shifts: document.getElementById('m-wc').value.trim(), last_updated: new Date().toISOString() };
   const btn = document.getElementById('addSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -1370,10 +1377,12 @@ function openEditModal(k) {
   document.getElementById('e-uom-cuts').checked = uom.includes('Cuts');
   document.getElementById('e-uom-lf').checked = uom.includes('LF');
   document.getElementById('e-uom-bf').checked = uom.includes('BF');
+  const eucyc = document.getElementById('e-uom-cycle'); if(eucyc) eucyc.checked = uom.includes('Cycle');
   const meetings = cam.meetings || '';
   document.getElementById('e-meet-discovery').checked = meetings.includes('discovery');
   document.getElementById('e-meet-sampling').checked = meetings.includes('sampling');
   document.getElementById('e-meet-datareview').checked = meetings.includes('datareview');
+  const ems = document.getElementById('e-meet-support'); if(ems) ems.checked = meetings.includes('support');
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -1389,12 +1398,14 @@ async function submitEditCamera() {
   if (document.getElementById('e-meet-discovery').checked) meetingVals.push('discovery');
   if (document.getElementById('e-meet-sampling').checked) meetingVals.push('sampling');
   if (document.getElementById('e-meet-datareview').checked) meetingVals.push('datareview');
+  if (document.getElementById('e-meet-support').checked) meetingVals.push('support');
   const uomVals = [];
   if (document.getElementById('e-uom-unit').checked) uomVals.push('Unit');
   if (document.getElementById('e-uom-pallet').checked) uomVals.push('Pallet');
   if (document.getElementById('e-uom-cuts').checked) uomVals.push('Cuts');
   if (document.getElementById('e-uom-lf').checked) uomVals.push('LF');
   if (document.getElementById('e-uom-bf').checked) uomVals.push('BF');
+  if (document.getElementById('e-uom-cycle').checked) uomVals.push('Cycle');
   const updates = { action: 'updateCamera', id: cameras[k].id, site, equipment: equip, type: document.getElementById('e-type').value, engineer: document.getElementById('e-engineer').value, vp: document.getElementById('e-vp').value.trim(), uom: uomVals.join(','), meetings: meetingVals.join(','), shifts: document.getElementById('e-wc').value.trim(), status: document.getElementById('e-status').value, newId: document.getElementById('e-id').value.trim(), historyText: 'Camera details updated', historyIsStatus: true };
   const btn = document.getElementById('editSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -1407,6 +1418,19 @@ async function submitEditCamera() {
     await loadCameras();
   } catch(e) { setSyncState('error', 'Save failed'); showError('Could not save changes: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Save changes'; }
+}
+
+async function duplicateCamera(k) {
+  const cam = cameras[k];
+  const newId = cam.id + '-COPY';
+  const copy = { ...cam, id: newId, equipment: cam.equipment + ' (copy)', status: 'Active', status_since: '', last_updated: new Date().toISOString(), _key: cameras.length, noteHistory: [], historyLoaded: false, updates: [], latest_team_note: cam.latest_team_note || '' };
+  setSyncState('syncing', 'Duplicating...');
+  try {
+    await apiPost({ action: 'addCamera', id: newId, site: cam.site, equipment: cam.equipment + ' (copy)', type: cam.type, engineer: cam.engineer, vp: cam.vp, uom: cam.uom, meetings: '', status: 'Active', notes: cam.notes, remarks: cam.remarks, shifts: cam.shifts });
+    cameras.push(copy);
+    setSyncState('ok', 'Duplicated');
+    populateSites(); populateVPs(); applyFilters();
+  } catch(e) { setSyncState('error', 'Duplicate failed'); showError('Could not duplicate: ' + e.message); }
 }
 
 async function clearNote(type, k) {
