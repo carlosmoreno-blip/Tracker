@@ -1363,6 +1363,7 @@ function openEditModal(k) {
   const cam = cameras[k];
   // Store ID at open time for reliable save
   document.getElementById('editModal').dataset.cameraId = cam.id;
+  document.getElementById('e-notes').value = ''; // clear so user adds fresh note
   document.getElementById('e-site').value = cam.site || '';
   document.getElementById('e-equip').value = cam.equipment || '';
   document.getElementById('e-id').value = cam.id || '';
@@ -1412,6 +1413,7 @@ async function submitEditCamera() {
   if (document.getElementById('e-uom-lf').checked) uomVals.push('LF');
   if (document.getElementById('e-uom-bf').checked) uomVals.push('BF');
   if (document.getElementById('e-uom-cycle').checked) uomVals.push('Cycle');
+  const noteText = document.getElementById('e-notes').value.trim();
   const updates = { action: 'updateCamera', id: cameras[k].id, site, equipment: equip, type: document.getElementById('e-type').value, engineer: document.getElementById('e-engineer').value, vp: document.getElementById('e-vp').value.trim(), uom: uomVals.join(','), meetings: meetingVals.join(','), shifts: document.getElementById('e-wc').value.trim(), status: document.getElementById('e-status').value, newId: document.getElementById('e-id').value.trim(), historyText: 'Camera details updated', historyIsStatus: true };
   const btn = document.getElementById('editSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving...';
@@ -1419,6 +1421,11 @@ async function submitEditCamera() {
   try {
     await apiPost(updates);
     Object.assign(cameras[k], { site: updates.site, equipment: updates.equipment, type: updates.type, engineer: updates.engineer, vp: updates.vp, uom: updates.uom, meetings: updates.meetings, shifts: updates.shifts, status: updates.status, id: updates.newId || cameras[k].id, last_updated: new Date().toISOString() });
+    // If a note was entered, post it as a CS note
+    if (noteText) {
+      cameras[k].latest_team_note = noteText;
+      apiPost({ action: 'updateCamera', id: updates.newId || cameras[k].id, noteText, historyText: noteText, historyIsStatus: false });
+    }
     setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
     closeEditModal();
     await loadCameras();
