@@ -269,7 +269,21 @@
     <button onclick="nextPage()">Next →</button>
   </div>
 
-  <div class="note-modal-overlay" id="noteModal">
+  <div class="note-modal-overlay" id="deleteModal">
+  <div class="note-modal" style="max-width:380px">
+    <div class="note-modal-title" style="color:#A32D2D">Delete camera</div>
+    <div class="note-modal-sub" id="deleteModalSub"></div>
+    <div style="background:#FCEBEB;border:1px solid #F09595;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;color:#791F1F">
+      This will permanently remove the camera from your Google Sheet. This cannot be undone.
+    </div>
+    <div class="note-modal-footer">
+      <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+      <button id="deleteConfirmBtn" onclick="confirmDelete()" style="padding:6px 16px;border-radius:6px;font-size:12px;cursor:pointer;background:#A32D2D;color:#fff;border:none;font-weight:500">Yes, delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="note-modal-overlay" id="noteModal">
   <div class="note-modal">
     <div class="note-modal-title" id="noteModalTitle">Add engineer note</div>
     <div class="note-modal-sub" id="noteModalSub"></div>
@@ -560,7 +574,7 @@ async function loadCameras() {
       updates: c.updates || [],
       status_since: c.status_since || c.blocked_since || '',
       // Seed latest_team_note from Sheet notes field if no history note yet
-      latest_team_note: c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || ''
+      latest_team_note: c.note_from_history ? (c.latest_team_note || '') : (c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || '')
     }));
     setSyncState('ok', 'Live · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
     document.getElementById('loadingBanner').style.display = 'none';
@@ -1049,7 +1063,8 @@ function render() {
       </td>
       <td style="white-space:nowrap">
         <button onclick="openEditModal(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;color:#555;margin-bottom:3px;display:block;width:100%">Edit</button>
-        <button onclick="duplicateCamera(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #B5D4F4;border-radius:5px;background:#E6F1FB;cursor:pointer;color:#185FA5;display:block;width:100%">Duplicate</button>
+        <button onclick="duplicateCamera(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #B5D4F4;border-radius:5px;background:#E6F1FB;cursor:pointer;color:#185FA5;margin-bottom:3px;display:block;width:100%">Duplicate</button>
+        <button onclick="openDeleteModal(${k})" style="font-size:11px;padding:4px 10px;border:1px solid #F09595;border-radius:5px;background:#FCEBEB;cursor:pointer;color:#A32D2D;display:block;width:100%">Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1422,15 +1437,57 @@ async function submitEditCamera() {
 
 async function duplicateCamera(k) {
   const cam = cameras[k];
-  const newId = cam.id + '-COPY';
-  const copy = { ...cam, id: newId, equipment: cam.equipment + ' (copy)', status: 'Active', status_since: '', last_updated: new Date().toISOString(), _key: cameras.length, noteHistory: [], historyLoaded: false, updates: [], latest_team_note: cam.latest_team_note || '' };
+  // Find next available suffix number
+  const baseId = cam.id.replace(/-\d+$/, '');
+  let suffix = 2;
+  while (cameras.some(c => c.id === baseId + '-' + suffix)) suffix++;
+  const newId = baseId + '-' + suffix;
+  const copy = { ...cam, id: newId, equipment: cam.equipment, status: 'Active', status_since: '', last_updated: new Date().toISOString(), _key: cameras.length, noteHistory: [], historyLoaded: false, updates: [], latest_team_note: '' };
   setSyncState('syncing', 'Duplicating...');
   try {
-    await apiPost({ action: 'addCamera', id: newId, site: cam.site, equipment: cam.equipment + ' (copy)', type: cam.type, engineer: cam.engineer, vp: cam.vp, uom: cam.uom, meetings: '', status: 'Active', notes: cam.notes, remarks: cam.remarks, shifts: cam.shifts });
+    await apiPost({ action: 'addCamera', id: newId, site: cam.site, equipment: cam.equipment, type: cam.type, engineer: cam.engineer, vp: cam.vp, uom: cam.uom, meetings: '', status: 'Active', notes: '', remarks: cam.remarks, shifts: cam.shifts });
     cameras.push(copy);
-    setSyncState('ok', 'Duplicated');
+    setSyncState('ok', 'Duplicated — edit to set unique ID');
     populateSites(); populateVPs(); applyFilters();
+    // Open edit modal on the new camera so user can immediately update ID/name
+    setTimeout(() => openEditModal(copy._key), 400);
   } catch(e) { setSyncState('error', 'Duplicate failed'); showError('Could not duplicate: ' + e.message); }
+}
+
+let _deleteKey = null;
+
+function openDeleteModal(k) {
+  _deleteKey = k;
+  const cam = cameras[k];
+  document.getElementById('deleteModalSub').textContent = cam.equipment + ' — ' + cam.site + ' (' + cam.id + ')';
+  document.getElementById('deleteModal').classList.add('open');
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('open');
+  _deleteKey = null;
+}
+
+async function confirmDelete() {
+  if (_deleteKey === null) return;
+  const k = _deleteKey;
+  const cam = cameras[k];
+  const btn = document.getElementById('deleteConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deleting...';
+  setSyncState('syncing', 'Deleting...');
+  try {
+    await apiPost({ action: 'deleteCamera', id: cam.id });
+    cameras.splice(k, 1);
+    // Re-index _key for all cameras
+    cameras.forEach((c, i) => c._key = i);
+    setSyncState('ok', 'Deleted');
+    closeDeleteModal();
+    populateSites(); populateVPs(); applyFilters();
+  } catch(e) {
+    setSyncState('error', 'Delete failed');
+    showError('Could not delete camera: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Yes, delete';
+  }
 }
 
 async function clearNote(type, k) {
@@ -1466,6 +1523,7 @@ document.getElementById('noteModal').addEventListener('click', function(e) { if 
 document.getElementById('noteModalText').addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitNoteModal();
 });
+document.getElementById('deleteModal').addEventListener('click', function(e) { if (e.target === this) closeDeleteModal(); });
 document.getElementById('addModal').addEventListener('click', function(e) { if (e.target === this) closeAddModal(); });
 document.getElementById('editModal').addEventListener('click', function(e) { if (e.target === this) closeEditModal(); });
 
