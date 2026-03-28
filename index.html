@@ -284,6 +284,23 @@
   </div>
 </div>
 
+<div class="note-modal-overlay" id="historyModal">
+  <div class="note-modal" style="width:560px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="note-modal-title" id="historyModalTitle">Note History</div>
+      <button onclick="closeHistoryModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;line-height:1">&#x2715;</button>
+    </div>
+    <div class="note-modal-sub" id="historyModalSub"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid #eee;padding-bottom:10px">
+      <button id="hist-tab-cs" onclick="switchHistTab('cs')" style="font-size:12px;padding:4px 14px;border-radius:999px;border:1.5px solid #185FA5;background:#E6F1FB;color:#0C447C;cursor:pointer;font-weight:600">CS Notes</button>
+      <button id="hist-tab-eng" onclick="switchHistTab('eng')" style="font-size:12px;padding:4px 14px;border-radius:999px;border:1.5px solid #ddd;background:#fff;color:#888;cursor:pointer">Engineer Notes</button>
+    </div>
+    <div id="historyModalContent" style="overflow-y:auto;flex:1;padding-right:4px">
+      <div style="font-size:12px;color:#aaa;text-align:center;padding:20px">Loading...</div>
+    </div>
+  </div>
+</div>
+
 <div class="note-modal-overlay" id="noteModal">
   <div class="note-modal">
     <div class="note-modal-title" id="noteModalTitle">Add engineer note</div>
@@ -1070,7 +1087,10 @@ function render() {
         </div>
         ${!latestEng ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
 
-        <button class="add-note-btn eng" onclick="openNoteModal('eng',${k})" style="margin-top:4px">+ Add note</button>
+        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
+          <button class="add-note-btn eng" onclick="openNoteModal('eng',${k})">+ Add note</button>
+          <button class="add-note-btn" onclick="openHistoryModal(${k},'eng')" style="border-color:#ddd;color:#666">History</button>
+        </div>
       </td></td>
       <td style="min-width:200px">
         <div id="cs-latest-${k}" style="font-size:11px;background:#f0f6ff;border-left:3px solid #185FA5;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;position:relative;${(cam.latest_team_note||cam.remarks)?'':'display:none'}">
@@ -1080,7 +1100,10 @@ function render() {
         </div>
         ${!(cam.latest_team_note||cam.remarks) ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
 
-        <button class="add-note-btn cs" onclick="openNoteModal('cs',${k})" style="margin-top:4px">+ Add note</button>
+        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
+          <button class="add-note-btn cs" onclick="openNoteModal('cs',${k})">+ Add note</button>
+          <button class="add-note-btn" onclick="openHistoryModal(${k},'cs')" style="border-color:#ddd;color:#666">History</button>
+        </div>
       </td>
       <td style="min-width:80px">${(cam.uom||'').split(',').filter(Boolean).map(u=>`<span class="uom-pill">${u}</span>`).join('')||'<span style="color:#bbb;font-size:11px">—</span>'}</td>
       <td style="white-space:nowrap;font-size:12px;min-width:80px">${cam.vp || '<span style="color:#bbb">—</span>'}</td>
@@ -1544,6 +1567,91 @@ async function confirmDelete() {
   }
 }
 
+let _histModalKey = null;
+let _histModalTab = 'cs';
+
+async function openHistoryModal(k, tab) {
+  _histModalKey = k;
+  _histModalTab = tab || 'cs';
+  const cam = cameras[k];
+  document.getElementById('historyModalTitle').textContent = 'Note History';
+  document.getElementById('historyModalSub').textContent = cam.equipment + ' — ' + cam.site;
+  document.getElementById('historyModal').classList.add('open');
+  switchHistTab(_histModalTab);
+  // Fetch history from server
+  document.getElementById('historyModalContent').innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:20px">Loading...</div>';
+  try {
+    const data = await apiFetch({ action: 'getHistory', cameraId: cam.id });
+    if (data && data.history) {
+      const SYSTEM_TEXTS = ['camera added', 'camera details updated', 'meetings updated', 'verification updated', 'note cleared', 'engineer note cleared'];
+      const SYSTEM_ARROW = (t) => t.includes(' → ');
+      cameras[k]._fullHistory = data.history.map(h => ({
+        text: String(h.text || ''),
+        engineer: String(h.engineer || ''),
+        isStatus: h.isStatus === true || h.isStatus === 'TRUE',
+        isUpdate: h.isUpdate === true || h.isUpdate === 'TRUE',
+        time: String(h.time || '')
+      })).filter(h => {
+        if (h.isStatus) return false;
+        if (SYSTEM_ARROW(h.text)) return false;
+        if (SYSTEM_TEXTS.includes(h.text.toLowerCase().trim())) return false;
+        if (h.engineer === '__cleared__') return false;
+        return true;
+      });
+    } else {
+      cameras[k]._fullHistory = [];
+    }
+    renderHistoryModal();
+  } catch(e) {
+    document.getElementById('historyModalContent').innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:20px">Could not load history.</div>';
+  }
+}
+
+function switchHistTab(tab) {
+  _histModalTab = tab;
+  const csBtn = document.getElementById('hist-tab-cs');
+  const engBtn = document.getElementById('hist-tab-eng');
+  if (csBtn && engBtn) {
+    if (tab === 'cs') {
+      csBtn.style.background = '#E6F1FB'; csBtn.style.borderColor = '#185FA5'; csBtn.style.color = '#0C447C'; csBtn.style.fontWeight = '600';
+      engBtn.style.background = '#fff'; engBtn.style.borderColor = '#ddd'; engBtn.style.color = '#888'; engBtn.style.fontWeight = '400';
+    } else {
+      engBtn.style.background = '#EAF3DE'; engBtn.style.borderColor = '#3B6D11'; engBtn.style.color = '#085041'; engBtn.style.fontWeight = '600';
+      csBtn.style.background = '#fff'; csBtn.style.borderColor = '#ddd'; csBtn.style.color = '#888'; csBtn.style.fontWeight = '400';
+    }
+  }
+  renderHistoryModal();
+}
+
+function renderHistoryModal() {
+  const k = _histModalKey;
+  const content = document.getElementById('historyModalContent');
+  if (!content || k === null || !cameras[k]._fullHistory) return;
+  const history = cameras[k]._fullHistory;
+  let entries;
+  if (_histModalTab === 'eng') {
+    entries = history.filter(h => h.isUpdate || h.engineer).reverse();
+  } else {
+    entries = history.filter(h => !h.isUpdate && !h.engineer).reverse();
+  }
+  if (!entries.length) {
+    content.innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:20px">No ' + (_histModalTab === 'eng' ? 'engineer' : 'CS') + ' notes yet.</div>';
+    return;
+  }
+  const isEng = _histModalTab === 'eng';
+  content.innerHTML = entries.map(h => `
+    <div style="background:${isEng?'#EAF3DE':'#f0f6ff'};border-left:3px solid ${isEng?'#3B6D11':'#185FA5'};border-radius:0 6px 6px 0;padding:8px 12px;margin-bottom:8px">
+      ${isEng && h.engineer ? `<strong style="font-size:11px;color:${isEng?'#3B6D11':'#185FA5'}">${h.engineer}</strong> · ` : ''}
+      <span style="font-size:10px;color:#aaa">${fmtDate(h.time)}</span>
+      <div style="font-size:12px;margin-top:4px;color:#333;line-height:1.5">${h.text}</div>
+    </div>`).join('');
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('open');
+  _histModalKey = null;
+}
+
 async function clearNote(type, k) {
   if (!confirm('Clear this note from the display?')) return;
   if (type === 'cs') {
@@ -1577,6 +1685,7 @@ document.getElementById('noteModal').addEventListener('click', function(e) { if 
 document.getElementById('noteModalText').addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitNoteModal();
 });
+document.getElementById('historyModal').addEventListener('click', function(e) { if (e.target === this) closeHistoryModal(); });
 document.getElementById('deleteModal').addEventListener('click', function(e) { if (e.target === this) closeDeleteModal(); });
 document.getElementById('addModal').addEventListener('click', function(e) { if (e.target === this) closeAddModal(); });
 document.getElementById('editModal').addEventListener('click', function(e) { if (e.target === this) closeEditModal(); });
