@@ -109,6 +109,16 @@
   @media (max-width: 768px) { header h1 { font-size: 14px; } .stats { grid-template-columns: repeat(3, 1fr); } .modal-grid { grid-template-columns: 1fr; } .modal-grid .full { grid-column: 1; } }
   .blocked-duration { display:inline-block; font-size:9px; font-weight:500; padding:1px 6px; border-radius:999px; background:#F1EFE8; color:#888; border:1px solid #e0e0de; margin-top:3px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
   .blocked-duration.warning { background:#FCEBEB; color:#A32D2D; border-color:#F09595; font-weight:600; }
+  .site-card { background:#fff;border-radius:10px;border:1px solid #e0e0de;padding:14px 16px;cursor:pointer;transition:box-shadow 0.15s,border-color 0.15s; }
+  .site-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.1);border-color:#bbb; }
+  .site-card.has-blocked { border-left:4px solid #A32D2D; }
+  .site-card-name { font-size:14px;font-weight:600;color:#1a1a18;margin-bottom:8px;display:flex;align-items:center;gap:6px; }
+  .site-card-flag { font-size:10px;background:#FCEBEB;color:#A32D2D;border:1px solid #F09595;border-radius:4px;padding:1px 6px;font-weight:600; }
+  .site-status-row { display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:2px 0;border-bottom:1px solid #f5f5f3; }
+  .site-status-row:last-child { border-bottom:none; }
+  .site-status-label { color:#555; }
+  .site-status-count { font-weight:600;color:#1a1a18; }
+  .site-total { font-size:11px;color:#888;margin-top:6px;padding-top:6px;border-top:1px solid #eee; }
   .weekly-report { display:none; padding: 0 0 40px; }
   .weekly-report.visible { display:block; }
   .wr-header { background:#0f1923; color:#fff; padding:20px 24px 18px; border-radius:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:flex-start; }
@@ -232,6 +242,7 @@
     <select id="filterStatus"><option value="">All statuses</option></select>
     <select id="filterType"><option value="">All types</option><option>Legacy</option><option>NXT</option><option>Quality</option></select>
     <select id="filterVP" style="height:34px;padding:0 8px;border:1px solid #e0e0de;border-radius:6px;font-size:12px;background:#f9f9f7;min-width:120px"><option value="">All VPs</option></select>
+    <button onclick="toggleSiteOverview()" style="height:30px;padding:0 12px;background:#5a2d82;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="siteOverviewBtn">Site overview</button>
     <button onclick="toggleQuickNotes(true)" style="height:30px;padding:0 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="meetingViewBtn">Meeting view</button>
     <button onclick="toggleWeeklyReport()" id="weeklyReportBtn" style="height:30px;padding:0 12px;background:#0f1923;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Weekly report</button>
     <button id="retiredToggleBtn" onclick="toggleRetired()" style="height:30px;padding:0 12px;background:#fff;color:#888;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Show retired</button>
@@ -315,6 +326,17 @@
       <button class="btn-save" id="noteModalSave" onclick="submitNoteModal()">Save note</button>
     </div>
   </div>
+</div>
+
+<div id="siteOverviewPanel" style="display:none;padding:16px 0">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div>
+      <div style="font-size:16px;font-weight:600;color:#1a1a18">Site Overview</div>
+      <div style="font-size:11px;color:#888" id="siteOverviewMeta"></div>
+    </div>
+    <button onclick="toggleSiteOverview()" style="font-size:12px;padding:4px 12px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#555">✕ Close</button>
+  </div>
+  <div id="siteOverviewGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
 </div>
 
 <div class="weekly-report" id="weeklyReport">
@@ -609,7 +631,8 @@ async function loadCameras() {
       status_since: c.status_since || c.blocked_since || '',
       verification: c.verification || '',
       // Seed latest_team_note from Sheet notes field if no history note yet
-      latest_team_note: c.note_from_history ? (c.latest_team_note || '') : (c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || '')
+      latest_team_note: c.note_from_history ? (c.latest_team_note || '') : (c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || ''),
+      latest_note_time: c.latest_note_time || c.last_updated || ''
     }));
     setSyncState('ok', 'Live · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
     document.getElementById('loadingBanner').style.display = 'none';
@@ -778,6 +801,79 @@ function sortBy(col, th) {
 const NEXT_ACTIONS_KEY = 'ufp_next_actions_v1';
 function loadNextActions() { try { return JSON.parse(localStorage.getItem(NEXT_ACTIONS_KEY)||'{}'); } catch(e){ return {}; } }
 function saveNextAction(site, val) { const d=loadNextActions(); d[site]=val; localStorage.setItem(NEXT_ACTIONS_KEY, JSON.stringify(d)); }
+
+let siteOverviewVisible = false;
+
+function toggleSiteOverview() {
+  siteOverviewVisible = !siteOverviewVisible;
+  const panel = document.getElementById('siteOverviewPanel');
+  const tableWrap = document.getElementById('tableWrap');
+  const pagebar = document.querySelector('.pagebar');
+  const btn = document.getElementById('siteOverviewBtn');
+  const statsRow = document.getElementById('statsRow').parentElement;
+  if (siteOverviewVisible) {
+    buildSiteOverview();
+    panel.style.display = 'block';
+    tableWrap.style.display = 'none';
+    if (pagebar) pagebar.style.display = 'none';
+    statsRow.style.display = 'none';
+    btn.style.background = '#fff';
+    btn.style.color = '#5a2d82';
+    btn.style.border = '1px solid #5a2d82';
+    btn.textContent = '✕ Close overview';
+  } else {
+    panel.style.display = 'none';
+    tableWrap.style.display = 'block';
+    if (pagebar) pagebar.style.display = '';
+    statsRow.style.display = '';
+    btn.style.background = '#5a2d82';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.textContent = 'Site overview';
+  }
+}
+
+function buildSiteOverview() {
+  const active = cameras.filter(c => c.status !== 'No longer in use');
+  const siteMap = {};
+  active.forEach(c => {
+    if (!siteMap[c.site]) siteMap[c.site] = [];
+    siteMap[c.site].push(c);
+  });
+  const sites = Object.keys(siteMap).sort();
+
+  document.getElementById('siteOverviewMeta').textContent = sites.length + ' sites · ' + active.length + ' cameras';
+
+  const grid = document.getElementById('siteOverviewGrid');
+  grid.innerHTML = sites.map(site => {
+    const cams = siteMap[site];
+    const hasBlocked = cams.some(c => c.status === 'Blocked');
+    // Count by status
+    const counts = {};
+    cams.forEach(c => { counts[c.status] = (counts[c.status] || 0) + 1; });
+    const statusRows = Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([s,n]) => `
+      <div class="site-status-row">
+        <span class="site-status-label"><span class="badge b-${STATUS_CLASS[s]||'active'}" style="font-size:9px;padding:1px 5px">${s}</span></span>
+        <span class="site-status-count">${n}</span>
+      </div>`).join('');
+    return `<div class="site-card ${hasBlocked?'has-blocked':''}" onclick="filterBySite('${site.replace(/'/g,"\'")}')">
+      <div class="site-card-name">
+        ${site}
+        ${hasBlocked ? '<span class="site-card-flag">⚠ Blocked</span>' : ''}
+      </div>
+      ${statusRows}
+      <div class="site-total">${cams.length} camera${cams.length!==1?'s':''} total — <span style="color:#185FA5">click to filter</span></div>
+    </div>`;
+  }).join('');
+}
+
+function filterBySite(site) {
+  // Close overview and apply site filter
+  toggleSiteOverview();
+  const el = document.getElementById('filterSite');
+  if (el) { el.value = site; }
+  applyFilters();
+}
 
 let weeklyReportVisible = false;
 
@@ -1083,7 +1179,7 @@ function render() {
       <td style="min-width:210px">
         <div id="eng-latest-${k}" style="font-size:11px;background:#EAF3DE;border-left:3px solid #3B6D11;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;position:relative;${latestEng?'':'display:none'}">
           <button onclick="clearNote('eng',${k})" title="Clear note" style="position:absolute;top:3px;right:5px;background:none;border:none;cursor:pointer;font-size:11px;color:#aaa;line-height:1">&#x2715;</button>
-          ${latestEng ? `<strong style="color:#3B6D11;font-size:10px">${latestEng.engineer}</strong> <span style="font-size:10px;color:#aaa">${fmtRel(latestEng.time)}</span><div style="margin-top:2px;color:#333">${latestEng.text}</div>` : ''}
+          ${latestEng ? `<strong style="color:#3B6D11;font-size:10px">${latestEng.engineer}</strong> <span style="font-size:9px;color:#aaa;margin-left:4px">${fmtRel(latestEng.time)}</span><div style="margin-top:2px;color:#333">${latestEng.text}</div>` : ''}
         </div>
         ${!latestEng ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
 
@@ -1096,6 +1192,7 @@ function render() {
         <div id="cs-latest-${k}" style="font-size:11px;background:#f0f6ff;border-left:3px solid #185FA5;border-radius:0 4px 4px 0;padding:5px 8px;margin-bottom:5px;position:relative;${(cam.latest_team_note||cam.remarks)?'':'display:none'}">
           <button onclick="clearNote('cs',${k})" title="Clear note" style="position:absolute;top:3px;right:5px;background:none;border:none;cursor:pointer;font-size:11px;color:#aaa;line-height:1">&#x2715;</button>
           ${cam.latest_team_note || ''}
+          ${cam.latest_note_time ? `<div style="margin-top:3px;font-size:9px;color:#aaa">${fmtRel(cam.latest_note_time)}</div>` : ''}
           ${cam.remarks && cam.remarks !== cam.latest_team_note ? `<div style="margin-top:3px;font-style:italic;color:#666;font-size:10px">${cam.remarks}</div>` : ''}
         </div>
         ${!(cam.latest_team_note||cam.remarks) ? '<span style="font-size:11px;color:#bbb;display:block;margin-bottom:4px">No notes yet</span>' : ''}
