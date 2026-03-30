@@ -311,7 +311,7 @@
     </select>
     <textarea id="noteModalText" placeholder="Type your note here…"></textarea>
     <div class="note-modal-footer">
-      <button class="btn-cancel" onclick="closeNoteModal()">Cancel</button>
+      <button class="btn-cancel" onclick="closeNoteModal()" id="noteModalCancel">Skip</button>
       <button class="btn-save" id="noteModalSave" onclick="submitNoteModal()">Save note</button>
     </div>
   </div>
@@ -1132,7 +1132,7 @@ function rememberEngineer(val) {
 let _noteModalType = null;
 let _noteModalKey = null;
 
-function openNoteModal(type, k) {
+function openNoteModal(type, k, context) {
   _noteModalType = type;
   _noteModalKey = k;
   const cam = cameras[k];
@@ -1151,7 +1151,8 @@ function openNoteModal(type, k) {
     saveBtn.style.background = '#3B6D11';
   } else {
     title.textContent = 'Add CS note';
-    sub.textContent = cam.equipment + ' — ' + cam.site;
+    sub.textContent = context ? context : cam.equipment + ' — ' + cam.site;
+    sub.style.color = context ? '#185FA5' : '#888';
     engSel.style.display = 'none';
     saveBtn.textContent = 'Save note';
     saveBtn.style.background = '#185FA5';
@@ -1332,6 +1333,8 @@ async function changeStatus(sel) {
   const badge = document.getElementById('badge-' + k);
   if (badge) { badge.className = 'badge b-' + (STATUS_CLASS[newStatus] || 'active'); badge.textContent = newStatus; }
   flashRow(k); buildStats(); render();
+  // Prompt for a CS note on status change
+  setTimeout(() => openNoteModal('cs', k, cam.equipment + ' — ' + cam.site + ' · Status → ' + newStatus), 150);
   // Save in background silently
   apiPost({ action: 'updateCamera', id: cameras[k].id, status: newStatus, status_since: cameras[k].status_since, historyText: oldStatus + ' → ' + newStatus, historyIsStatus: true })
     .then(() => setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })))
