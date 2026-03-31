@@ -561,6 +561,8 @@ function saveScriptUrl() {
   const exp = new Date(Date.now() + 365*24*60*60*1000).toUTCString();
   document.cookie = URL_KEY + '=' + encodeURIComponent(val) + '; expires=' + exp + '; path=/; SameSite=None; Secure';
   document.getElementById('configBanner').style.display = 'none';
+  console.log('URL saved:', val);
+  console.log('getScriptUrl returns:', getScriptUrl());
   loadCameras();
 }
 
@@ -583,8 +585,11 @@ async function apiFetch(params) {
   const url = getScriptUrl();
   if (!url) return null;
   const qs = new URLSearchParams(params).toString();
+  console.log('Fetching:', url + '?' + qs);
   const res = await fetch(url + '?' + qs);
+  console.log('Response status:', res.status);
   const data = await res.json();
+  console.log('Data received:', JSON.stringify(data).substring(0, 100));
   if (data.error) throw new Error(data.error);
   return data;
 }
@@ -602,6 +607,7 @@ async function apiPost(body) {
 
 async function loadCameras() {
   const url = getScriptUrl();
+  console.log('loadCameras called, url:', url);
   if (!url) {
     document.getElementById('loadingBanner').textContent = 'Paste your Apps Script URL above to connect.';
     return;
