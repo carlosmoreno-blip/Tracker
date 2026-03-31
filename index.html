@@ -558,8 +558,10 @@ function saveScriptUrl() {
   if (!val.startsWith('https://script.google.com')) { alert('Please paste a valid Apps Script URL.'); return; }
   try { localStorage.setItem(URL_KEY, val); } catch(e) {}
   try { sessionStorage.setItem(URL_KEY, val); } catch(e) {}
-  const exp = new Date(Date.now() + 365*24*60*60*1000).toUTCString();
-  document.cookie = URL_KEY + '=' + encodeURIComponent(val) + '; expires=' + exp + '; path=/; SameSite=None; Secure';
+  try {
+    const exp = new Date(Date.now() + 365*24*60*60*1000).toUTCString();
+    document.cookie = URL_KEY + '=' + encodeURIComponent(val) + '; expires=' + exp + '; path=/';
+  } catch(e) {}
   document.getElementById('configBanner').style.display = 'none';
   loadCameras();
 }
@@ -1748,11 +1750,16 @@ document.getElementById('editModal').addEventListener('click', function(e) { if 
 
 // Auto-connect on load
 document.addEventListener('DOMContentLoaded', function() {
+  const savedUrl = getScriptUrl();
+  if (savedUrl) {
+    const banner = document.getElementById('configBanner');
+    if (banner) banner.style.display = 'none';
+  }
   populateSites();
   populateStatuses();
   populateVPs();
   loadCameras();
-  setInterval(() => { loadCameras(); }, 5 * 60 * 1000);
+  setInterval(() => { if (getScriptUrl()) loadCameras(); }, 5 * 60 * 1000);
 });
 
 </script>
