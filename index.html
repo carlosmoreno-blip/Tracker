@@ -851,6 +851,7 @@ function buildSiteOverview() {
       <div class="site-total">${cams.length} camera${cams.length!==1?'s':''} total — <span style="color:#185FA5">click to filter</span></div>
     </div>`;
   }).join('');
+  }
 }
 
 function filterBySite(site) {
@@ -1090,9 +1091,10 @@ async function toggleQuickNotes(show) {
         <div style="font-size:11px;color:#333;line-height:1.5;padding:6px 8px;background:${isUpdate?'#F5FAF0':'#F0F6FF'};border-radius:5px;margin-bottom:4px">${noteText}</div>
         <div style="font-size:10px;color:#aaa">${noteMeta}</div>
       </div>`;
-    }).join('')
-
+    }).join('');
+  }
 }
+
 function render() {
   buildStats();
   const start = (page - 1) * PAGE, end = Math.min(start + PAGE, filtered.length);
