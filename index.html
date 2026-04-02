@@ -243,6 +243,7 @@
     <select id="filterType"><option value="">All types</option><option>Legacy</option><option>NXT</option><option>Quality</option></select>
     <select id="filterVP" style="height:34px;padding:0 8px;border:1px solid #e0e0de;border-radius:6px;font-size:12px;background:#f9f9f7;min-width:120px"><option value="">All VPs</option></select>
     <button onclick="toggleSiteOverview()" style="height:30px;padding:0 12px;background:#5a2d82;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="siteOverviewBtn">Site overview</button>
+    <button onclick="toggleRecentView()" style="height:30px;padding:0 12px;background:#0F6E56;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="recentViewBtn">Recent</button>
     <button onclick="toggleQuickNotes(true)" style="height:30px;padding:0 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="meetingViewBtn">Meeting view</button>
     <button onclick="toggleWeeklyReport()" id="weeklyReportBtn" style="height:30px;padding:0 12px;background:#0f1923;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Weekly report</button>
     <button id="retiredToggleBtn" onclick="toggleRetired()" style="height:30px;padding:0 12px;background:#fff;color:#888;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Show retired</button>
@@ -337,6 +338,17 @@
       <button class="btn-save" id="noteModalSave" onclick="submitNoteModal()">Save note</button>
     </div>
   </div>
+</div>
+
+<div id="recentViewPanel" style="display:none;padding:16px 0">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div>
+      <div style="font-size:16px;font-weight:600;color:#1a1a18">Recently Updated</div>
+      <div style="font-size:11px;color:#888" id="recentViewMeta"></div>
+    </div>
+    <button onclick="toggleRecentView()" style="font-size:12px;padding:4px 12px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#555">✕ Close</button>
+  </div>
+  <div id="recentViewGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
 </div>
 
 <div class="weekly-report" id="weeklyReport">
@@ -636,6 +648,7 @@ async function loadCameras() {
       latest_team_note: c.note_from_history ? (c.latest_team_note || '') : (c.latest_team_note || (c.notes && c.notes !== 'undefined' ? c.notes : '') || ''),
       latest_note_time: c.latest_note_time || c.last_updated || ''
     }));
+    window._lastLoadTime = Date.now();
     setSyncState('ok', 'Live · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
     document.getElementById('loadingBanner').style.display = 'none';
     document.getElementById('tableWrap').style.display = 'block';
@@ -803,6 +816,89 @@ function sortBy(col, th) {
 const NEXT_ACTIONS_KEY = 'ufp_next_actions_v1';
 function loadNextActions() { try { return JSON.parse(localStorage.getItem(NEXT_ACTIONS_KEY)||'{}'); } catch(e){ return {}; } }
 function saveNextAction(site, val) { const d=loadNextActions(); d[site]=val; localStorage.setItem(NEXT_ACTIONS_KEY, JSON.stringify(d)); }
+
+let recentViewVisible = false;
+
+function toggleRecentView() {
+  recentViewVisible = !recentViewVisible;
+  const panel = document.getElementById('recentViewPanel');
+  const tableWrap = document.getElementById('tableWrap');
+  const pagebar = document.querySelector('.pagebar');
+  const btn = document.getElementById('recentViewBtn');
+  const sitePanel = document.getElementById('siteOverviewPanel');
+  if (recentViewVisible) {
+    // Close other views
+    if (siteOverviewVisible) toggleSiteOverview();
+    buildRecentView();
+    panel.style.display = 'block';
+    tableWrap.style.display = 'none';
+    if (pagebar) pagebar.style.display = 'none';
+    btn.style.background = '#fff';
+    btn.style.color = '#0F6E56';
+    btn.style.border = '1px solid #0F6E56';
+    btn.textContent = '✕ Close recent';
+  } else {
+    panel.style.display = 'none';
+    tableWrap.style.display = 'block';
+    if (pagebar) pagebar.style.display = '';
+    btn.style.background = '#0F6E56';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.textContent = 'Recent';
+  }
+}
+
+function buildRecentView() {
+  const active = cameras
+    .filter(c => c.status !== 'No longer in use' && c.last_updated)
+    .sort((a, b) => new Date(b.last_updated) - new Date(a.last_updated))
+    .slice(0, 50); // show last 50 updated
+
+  document.getElementById('recentViewMeta').textContent =
+    'Last ' + active.length + ' updated cameras — most recent first';
+
+  const grid = document.getElementById('recentViewGrid');
+  grid.innerHTML = active.map(cam => {
+    const isBlocked = cam.status === 'Blocked';
+    const statusClass = STATUS_CLASS[cam.status] || 'active';
+    const latestEng = cam.updates && cam.updates.length ? cam.updates[cam.updates.length - 1] : null;
+    const latestCs = cam.latest_team_note;
+    return `<div style="background:#fff;border-radius:8px;border:1px solid ${isBlocked?'#F09595':'#e0e0de'};border-left:3px solid ${isBlocked?'#A32D2D':'#1D9E75'};padding:12px 14px;cursor:pointer" onclick="jumpToCamera('${cam.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.3px;font-weight:500">${cam.site || ''}</div>
+          <div style="font-size:13px;font-weight:600;color:#1a1a18">${cam.equipment || ''}</div>
+          <div style="font-size:10px;color:#aaa">${cam.id || ''}</div>
+        </div>
+        <span class="badge b-${statusClass}" style="font-size:9px;padding:2px 7px;white-space:nowrap;margin-left:8px">${cam.status || ''}</span>
+      </div>
+      <div style="font-size:10px;color:#aaa;margin-bottom:6px">Updated ${fmtRel(cam.last_updated)}</div>
+      ${latestEng ? `<div style="font-size:11px;background:#EAF3DE;border-left:2px solid #3B6D11;padding:4px 8px;border-radius:0 4px 4px 0;margin-bottom:4px">
+        <strong style="font-size:10px;color:#3B6D11">${latestEng.engineer}</strong> <span style="font-size:9px;color:#aaa">${fmtRel(latestEng.time)}</span>
+        <div style="margin-top:1px;color:#333">${latestEng.text}</div>
+      </div>` : ''}
+      ${latestCs ? `<div style="font-size:11px;background:#f0f6ff;border-left:2px solid #185FA5;padding:4px 8px;border-radius:0 4px 4px 0">
+        <span style="font-size:9px;color:#aaa;display:block;margin-bottom:1px">${fmtRel(cam.latest_note_time || cam.last_updated)}</span>
+        <div style="color:#333">${latestCs}</div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function jumpToCamera(id) {
+  // Close recent view and filter to the camera's site
+  toggleRecentView();
+  const cam = cameras.find(c => c.id === id);
+  if (!cam) return;
+  const el = document.getElementById('filterSite');
+  if (el) { el.value = cam.site; }
+  applyFilters();
+  // Flash the row after render
+  setTimeout(() => {
+    const k = cameras.findIndex(c => c.id === id);
+    if (k >= 0) flashRow(k);
+  }, 300);
+}
 
 let siteOverviewVisible = false;
 
@@ -1770,7 +1866,10 @@ document.addEventListener('DOMContentLoaded', function() {
   populateStatuses();
   populateVPs();
   loadCameras();
-  setInterval(() => { if (getScriptUrl()) loadCameras(); }, 15 * 60 * 1000);
+  // Only auto-refresh when tab is visible
+setInterval(() => {
+  if (getScriptUrl() && document.visibilityState === 'visible') loadCameras();
+}, 15 * 60 * 1000);
 });
 
 </script>
