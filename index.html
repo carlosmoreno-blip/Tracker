@@ -243,7 +243,7 @@
     <select id="filterType"><option value="">All types</option><option>Legacy</option><option>NXT</option><option>Quality</option></select>
     <select id="filterVP" style="height:34px;padding:0 8px;border:1px solid #e0e0de;border-radius:6px;font-size:12px;background:#f9f9f7;min-width:120px"><option value="">All VPs</option></select>
     <button onclick="toggleSiteOverview()" style="height:30px;padding:0 12px;background:#5a2d82;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="siteOverviewBtn">Site overview</button>
-    <button onclick="toggleRecentView()" style="height:30px;padding:0 12px;background:#0F6E56;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="recentViewBtn">Recent</button>
+    <button onclick="toggleRecentView()" style="height:30px;padding:0 12px;background:#0F6E56;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="recentViewBtn">Recent updates</button>
     <button onclick="toggleQuickNotes(true)" style="height:30px;padding:0 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;" id="meetingViewBtn">Meeting view</button>
     <button onclick="toggleWeeklyReport()" id="weeklyReportBtn" style="height:30px;padding:0 12px;background:#0f1923;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Weekly report</button>
     <button id="retiredToggleBtn" onclick="toggleRetired()" style="height:30px;padding:0 12px;background:#fff;color:#888;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Show retired</button>
@@ -836,7 +836,7 @@ function toggleRecentView() {
     btn.style.background = '#fff';
     btn.style.color = '#0F6E56';
     btn.style.border = '1px solid #0F6E56';
-    btn.textContent = '✕ Close recent';
+    btn.textContent = '✕ Close recent updates';
   } else {
     panel.style.display = 'none';
     tableWrap.style.display = 'block';
@@ -844,7 +844,7 @@ function toggleRecentView() {
     btn.style.background = '#0F6E56';
     btn.style.color = '#fff';
     btn.style.border = 'none';
-    btn.textContent = 'Recent';
+    btn.textContent = 'Recent updates';
   }
 }
 
@@ -852,37 +852,58 @@ function buildRecentView() {
   const active = cameras
     .filter(c => c.status !== 'No longer in use' && c.last_updated)
     .sort((a, b) => new Date(b.last_updated) - new Date(a.last_updated))
-    .slice(0, 50); // show last 50 updated
+    .slice(0, 50);
 
   document.getElementById('recentViewMeta').textContent =
     'Last ' + active.length + ' updated cameras — most recent first';
 
   const grid = document.getElementById('recentViewGrid');
-  grid.innerHTML = active.map(cam => {
-    const isBlocked = cam.status === 'Blocked';
-    const statusClass = STATUS_CLASS[cam.status] || 'active';
-    const latestEng = cam.updates && cam.updates.length ? cam.updates[cam.updates.length - 1] : null;
-    const latestCs = cam.latest_team_note;
-    return `<div style="background:#fff;border-radius:8px;border:1px solid ${isBlocked?'#F09595':'#e0e0de'};border-left:3px solid ${isBlocked?'#A32D2D':'#1D9E75'};padding:12px 14px;cursor:pointer" onclick="jumpToCamera('${cam.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div>
-          <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.3px;font-weight:500">${cam.site || ''}</div>
-          <div style="font-size:13px;font-weight:600;color:#1a1a18">${cam.equipment || ''}</div>
-          <div style="font-size:10px;color:#aaa">${cam.id || ''}</div>
-        </div>
-        <span class="badge b-${statusClass}" style="font-size:9px;padding:2px 7px;white-space:nowrap;margin-left:8px">${cam.status || ''}</span>
-      </div>
-      <div style="font-size:10px;color:#aaa;margin-bottom:6px">Updated ${fmtRel(cam.last_updated)}</div>
-      ${latestEng ? `<div style="font-size:11px;background:#EAF3DE;border-left:2px solid #3B6D11;padding:4px 8px;border-radius:0 4px 4px 0;margin-bottom:4px">
-        <strong style="font-size:10px;color:#3B6D11">${latestEng.engineer}</strong> <span style="font-size:9px;color:#aaa">${fmtRel(latestEng.time)}</span>
-        <div style="margin-top:1px;color:#333">${latestEng.text}</div>
-      </div>` : ''}
-      ${latestCs ? `<div style="font-size:11px;background:#f0f6ff;border-left:2px solid #185FA5;padding:4px 8px;border-radius:0 4px 4px 0">
-        <span style="font-size:9px;color:#aaa;display:block;margin-bottom:1px">${fmtRel(cam.latest_note_time || cam.last_updated)}</span>
-        <div style="color:#333">${latestCs}</div>
-      </div>` : ''}
-    </div>`;
-  }).join('');
+  grid.style.display = 'block';
+  grid.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:10px;border:1px solid #e0e0de;overflow:hidden">
+      <thead>
+        <tr style="background:#f7f7f5;border-bottom:1px solid #eee">
+          <th style="text-align:left;font-size:10px;font-weight:600;color:#888;padding:8px 12px;text-transform:uppercase;letter-spacing:0.4px">Site</th>
+          <th style="text-align:left;font-size:10px;font-weight:600;color:#888;padding:8px 12px;text-transform:uppercase;letter-spacing:0.4px">Equipment</th>
+          <th style="text-align:left;font-size:10px;font-weight:600;color:#888;padding:8px 12px;text-transform:uppercase;letter-spacing:0.4px">Status</th>
+          <th style="text-align:left;font-size:10px;font-weight:600;color:#888;padding:8px 12px;text-transform:uppercase;letter-spacing:0.4px">Last Updated</th>
+          <th style="text-align:left;font-size:10px;font-weight:600;color:#888;padding:8px 12px;text-transform:uppercase;letter-spacing:0.4px">Latest Engineer Note</th>
+          <th style="text-align:left;font-size:10px;font-weight:600;color:#888;padding:8px 12px;text-transform:uppercase;letter-spacing:0.4px">Latest CS Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${active.map(cam => {
+          const latestEng = cam.updates && cam.updates.length ? cam.updates[cam.updates.length - 1] : null;
+          const latestCs = cam.latest_team_note;
+          const isBlocked = cam.status === 'Blocked';
+          return `<tr style="border-bottom:1px solid #f5f5f3;cursor:pointer;transition:background 0.1s" 
+                       onmouseover="this.style.background='#fafaf8'" 
+                       onmouseout="this.style.background=''"
+                       onclick="jumpToCamera('${cam.id}')">
+            <td style="padding:8px 12px;font-size:12px;font-weight:500;white-space:nowrap">${cam.site || ''}</td>
+            <td style="padding:8px 12px;min-width:130px">
+              <div style="font-size:12px;font-weight:600;color:#1a1a18">${cam.equipment || ''}</div>
+              <div style="font-size:10px;color:#aaa">${cam.id || ''}</div>
+            </td>
+            <td style="padding:8px 12px;white-space:nowrap">
+              <span class="badge b-${STATUS_CLASS[cam.status]||'active'}" style="font-size:10px">${cam.status || ''}</span>
+              ${isBlocked ? '<div style="font-size:9px;color:#A32D2D;font-weight:600;margin-top:2px">⚠ Blocked</div>' : ''}
+            </td>
+            <td style="padding:8px 12px;font-size:11px;color:#888;white-space:nowrap">${fmtRel(cam.last_updated)}</td>
+            <td style="padding:8px 12px;max-width:220px">
+              ${latestEng ? `<div style="font-size:11px;color:#333">${latestEng.text}</div>
+                <div style="font-size:9px;color:#3B6D11;margin-top:1px">${latestEng.engineer} · ${fmtRel(latestEng.time)}</div>` 
+              : '<span style="font-size:11px;color:#ccc">—</span>'}
+            </td>
+            <td style="padding:8px 12px;max-width:220px">
+              ${latestCs ? `<div style="font-size:11px;color:#333">${latestCs}</div>
+                <div style="font-size:9px;color:#185FA5;margin-top:1px">${fmtRel(cam.latest_note_time || cam.last_updated)}</div>`
+              : '<span style="font-size:11px;color:#ccc">—</span>'}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
 }
 
 function jumpToCamera(id) {
