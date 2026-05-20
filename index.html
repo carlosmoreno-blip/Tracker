@@ -617,8 +617,10 @@ async function apiFetch(params) {
 async function apiPost(body) {
   const url = getScriptUrl();
   if (!url) return null;
-  // Only send action as URL param, everything else in payload to avoid URL length limits
-  const payload = encodeURIComponent(JSON.stringify(body));
+  // Use GET with action + payload - keep payload small by excluding empty fields
+  const clean = {};
+  Object.keys(body).forEach(k => { if (body[k] !== '' && body[k] !== undefined && body[k] !== null) clean[k] = body[k]; });
+  const payload = encodeURIComponent(JSON.stringify(clean));
   const res = await fetch(url + '?action=' + encodeURIComponent(body.action) + '&payload=' + payload);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
