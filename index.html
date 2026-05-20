@@ -619,7 +619,11 @@ async function apiPost(body) {
   if (!url) return null;
   // Use GET with action + payload - keep payload small by excluding empty fields
   const clean = {};
-  Object.keys(body).forEach(k => { if (body[k] !== '' && body[k] !== undefined && body[k] !== null) clean[k] = body[k]; });
+  // Exclude empty fields AND fields already in URL params or set server-side
+  const skipKeys = new Set(['last_updated']);
+  Object.keys(body).forEach(k => { 
+    if (!skipKeys.has(k) && body[k] !== '' && body[k] !== undefined && body[k] !== null) clean[k] = body[k]; 
+  });
   const payload = encodeURIComponent(JSON.stringify(clean));
   const res = await fetch(url + '?action=' + encodeURIComponent(body.action) + '&payload=' + payload);
   const data = await res.json();
@@ -1320,7 +1324,7 @@ function rememberEngineer(val) {
 let _noteModalType = null;
 let _noteModalKey = null;
 
-function openNoteModal(type, k) {
+function openNoteModal(type, k, context) {
   _noteModalType = type;
   _noteModalKey = k;
   const cam = cameras[k];
@@ -1339,7 +1343,8 @@ function openNoteModal(type, k) {
     saveBtn.style.background = '#3B6D11';
   } else {
     title.textContent = 'Add CS note';
-    sub.textContent = cam.equipment + ' — ' + cam.site;
+    sub.textContent = context || (cam.equipment + ' — ' + cam.site);
+    sub.style.color = context ? '#185FA5' : '#888';
     engSel.style.display = 'none';
     saveBtn.textContent = 'Save note';
     saveBtn.style.background = '#185FA5';
@@ -1501,7 +1506,7 @@ async function changeStatus(sel) {
   if (badge) { badge.className = 'badge b-' + (STATUS_CLASS[newStatus] || 'active'); badge.textContent = newStatus; }
   flashRow(k); buildStats(); render();
   // Also open CS note modal
-  setTimeout(() => openNoteModal('cs', k, cam.equipment + ' — ' + cam.site + ' · Status → ' + newStatus), 150);
+  setTimeout(() => openNoteModal('cs', k, cameras[k].equipment + ' — ' + cameras[k].site + ' · Status → ' + newStatus), 150);
   apiPost({ action: 'updateCamera', id: cameras[k].id, status: newStatus, status_since: cameras[k].status_since, historyText: oldStatus + ' → ' + newStatus, historyIsStatus: true })
     .then(() => { cameras[k].last_updated = new Date().toISOString(); setSyncState('ok', 'Saved · ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })); })
     .catch(e => {
